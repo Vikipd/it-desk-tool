@@ -21,7 +21,11 @@ function Login() {
     }
     setIsLoading(true);
     try {
+      // --- THIS IS THE FIX ---
+      // We now provide the FULL path to the API endpoint, including /api/
       const response = await api.post("/api/token/", { username, password });
+      // --- END OF FIX ---
+
       const { access, refresh } = response.data;
       const decodedToken = jwtDecode(access);
       const role = decodedToken.role?.trim().toUpperCase();
@@ -52,7 +56,6 @@ function Login() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4 font-sans">
       <div className="w-full max-w-6xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col lg:flex-row">
-        {/* Left Panel - CORRECTED Blue/Teal Gradient */}
         <div className="w-full lg:w-1/2 flex flex-col justify-center items-center bg-gradient-to-br from-blue-500 to-teal-400 p-12 text-center text-white">
           <ShieldCheck className="mx-auto h-24 w-24 text-white mb-6 opacity-90" />
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
@@ -62,8 +65,6 @@ function Login() {
             From issue to resolution, effortlessly.
           </p>
         </div>
-
-        {/* Right Panel - Clean White Form */}
         <div className="w-full lg:w-1/2 flex flex-col justify-center p-8 sm:p-16">
           <div className="w-full max-w-sm">
             <div className="mb-8 text-left">
@@ -86,7 +87,6 @@ function Login() {
                   required
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Password
@@ -115,8 +115,6 @@ function Login() {
                   </div>
                 </div>
               </div>
-
-              {/* CORRECTED Indigo/Purple Button */}
               <button
                 type="submit"
                 disabled={isLoading}

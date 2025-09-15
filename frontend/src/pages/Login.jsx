@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 import { toast } from "react-hot-toast";
-import { ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { ACCESS_TOKEN, REFRESH_TOKEN } from "../constants";
 import { jwtDecode } from "jwt-decode";
 
@@ -21,10 +21,8 @@ function Login() {
     }
     setIsLoading(true);
     try {
-      // --- THIS IS THE FIX ---
-      // We now provide the FULL path to the API endpoint, including /api/
+      // THIS IS THE FINAL, CORRECTED LINE
       const response = await api.post("/api/token/", { username, password });
-      // --- END OF FIX ---
 
       const { access, refresh } = response.data;
       const decodedToken = jwtDecode(access);
@@ -55,40 +53,38 @@ function Login() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4 font-sans">
-      <div className="w-full max-w-6xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col lg:flex-row">
-        <div className="w-full lg:w-1/2 flex flex-col justify-center items-center bg-gradient-to-br from-blue-500 to-teal-400 p-12 text-center text-white">
-          <ShieldCheck className="mx-auto h-24 w-24 text-white mb-6 opacity-90" />
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
+      <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col lg:flex-row">
+        <div className="w-full lg:w-1/2 flex flex-col justify-center bg-blue-600 p-12 text-white">
+          <h1 className="text-4xl font-bold tracking-tight">
             Fault Booking Tool
           </h1>
-          <p className="mt-4 text-lg text-blue-100">
-            From issue to resolution, effortlessly.
-          </p>
+          <p className="mt-4 text-lg text-blue-100">Operations, simplified.</p>
         </div>
-        <div className="w-full lg:w-1/2 flex flex-col justify-center p-8 sm:p-16">
-          <div className="w-full max-w-sm">
-            <div className="mb-8 text-left">
-              <h2 className="text-3xl font-bold text-gray-900">Welcome Back</h2>
+        <div className="w-full lg:w-1/2 flex flex-col justify-center p-12">
+          <div className="w-full max-w-md">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-gray-900">
+                Login to your account
+              </h2>
               <p className="mt-2 text-base text-gray-600">
-                Sign in to continue to your account
+                Enter your credentials to access your dashboard.
               </p>
             </div>
             <form onSubmit={handleLogin} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Username
                 </label>
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Password
                 </label>
                 <div className="relative">
@@ -96,32 +92,28 @@ function Login() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                    className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="text-gray-400 hover:text-gray-600 focus:outline-none"
-                      aria-label={
-                        showPassword ? "Hide password" : "Show password"
-                      }
-                      tabIndex="-1"
-                    >
-                      {showPassword ? <EyeOff size={22} /> : <Eye size={22} />}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                    tabIndex="-1"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
                 </div>
               </div>
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex items-center justify-center py-3 text-lg font-semibold text-white bg-indigo-600 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center py-3 text-base font-semibold text-white bg-teal-600 rounded-lg shadow-md hover:bg-teal-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 disabled:bg-teal-400"
               >
-                {isLoading ? "Signing In..." : "Sign In"}
-                {!isLoading && <ArrowRight className="ml-2 h-5 w-5" />}
+                {isLoading ? "Logging In..." : "Login"}
               </button>
             </form>
           </div>
@@ -130,5 +122,4 @@ function Login() {
     </div>
   );
 }
-
 export default Login;

@@ -28,7 +28,7 @@ backend/db.sqlite3
 frontend/node_modules/
 
 # Production build folder
-frontend/build/
+# frontend/build/
 
 # Log files
 frontend/npm-debug.log*

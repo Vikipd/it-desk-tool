@@ -1,16 +1,17 @@
 import axios from "axios";
 import { ACCESS_TOKEN, REFRESH_TOKEN } from "./constants";
 
-// --- THIS IS THE GUARANTEED FIX for DEPLOYMENT ---
-// The URL should point to the base of the server, NOT including /api
+// The apiUrl will be just the server's base address.
 const apiUrl = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+
+// --- THIS IS THE GUARANTEED FIX ---
+// We create the axios instance and set its baseURL to include the crucial '/api' prefix.
+// This ensures ALL requests (api.get('/users'), api.post('/tickets'), etc.) are sent to the correct endpoint.
+const api = axios.create({
+  baseURL: `${apiUrl}/api`,
+});
 // --- END OF FIX ---
 
-const api = axios.create({
-  baseURL: apiUrl,
-});
-
-// ... (the rest of the file is correct and does not need to change) ...
 let isRefreshing = false;
 let failedQueue = [];
 
@@ -35,9 +36,12 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && originalRequest.url.includes("/api/token")) {
+
+    // This check is now simpler because baseURL is handled by axios
+    if (error.response?.status === 401 && originalRequest.url === "/token/") {
       return Promise.reject(error);
     }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise(function(resolve, reject) {
@@ -45,23 +49,27 @@ api.interceptors.response.use(
         }).then(token => {
           originalRequest.headers['Authorization'] = 'Bearer ' + token;
           return api(originalRequest);
-        }).catch(err => {
-          return Promise.reject(err);
-        });
+        }).catch(err => { return Promise.reject(err); });
       }
+
       originalRequest._retry = true;
       isRefreshing = true;
+
       const refreshToken = localStorage.getItem(REFRESH_TOKEN);
       if (refreshToken) {
         try {
+          // The refresh call also uses the full, correct URL now
           const res = await axios.post(`${apiUrl}/api/token/refresh/`, { refresh: refreshToken });
           const newAccessToken = res.data.access;
           localStorage.setItem(ACCESS_TOKEN, newAccessToken);
           if (res.data.refresh) { localStorage.setItem(REFRESH_TOKEN, res.data.refresh); }
+          
           api.defaults.headers.common['Authorization'] = 'Bearer ' + newAccessToken;
           originalRequest.headers['Authorization'] = 'Bearer ' + newAccessToken;
+          
           processQueue(null, newAccessToken);
           return api(originalRequest);
+
         } catch (refreshError) {
           processQueue(refreshError, null);
           localStorage.clear();
@@ -78,4 +86,5 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 export default api;

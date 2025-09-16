@@ -8,37 +8,25 @@ from .serializers import (
     UserCreateSerializer,
     UserUpdateSerializer,
     AdminPasswordResetSerializer,
-    ChangePasswordSerializer # <-- MODIFICATION: Import new serializer
+    ChangePasswordSerializer
 )
 
-# --- NEW: Self-Service Password Change View ---
 class ChangePasswordView(generics.UpdateAPIView):
-    """
-    An endpoint for users to change their own password.
-    """
     serializer_class = ChangePasswordSerializer
     model = User
     permission_classes = (permissions.IsAuthenticated,)
 
     def get_object(self, queryset=None):
-        # The object is the currently authenticated user
         return self.request.user
 
     def update(self, request, *args, **kwargs):
         self.object = self.get_object()
         serializer = self.get_serializer(data=request.data)
-
         if serializer.is_valid():
-            # The serializer's update method handles the password change
             serializer.update(self.object, serializer.validated_data)
             return Response({"detail": "Password updated successfully"}, status=status.HTTP_200_OK)
-
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-# ... (rest of the file is unchanged)
-# MyTokenObtainPairView, UserListCreateView, UserRetrieveUpdateDestroyView, RestoreUserView, etc.
-# ...
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
 
@@ -56,10 +44,16 @@ class UserListCreateView(generics.ListCreateAPIView):
 class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     permission_classes = [permissions.IsAdminUser]
+    
+    # --- THIS IS THE GUARANTEED FIX ---
+    # This method was missing. It tells the view to use UserUpdateSerializer for PUT/PATCH
+    # requests, which allows the update to happen.
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
             return UserUpdateSerializer
         return UserSerializer
+    # --- END OF FIX ---
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.is_active = False

@@ -3,11 +3,12 @@ import { ACCESS_TOKEN, REFRESH_TOKEN } from "./constants";
 
 const apiUrl = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
-// --- THIS IS THE FIX ---
-// The baseURL for all api calls will be the server address PLUS /api/
+// --- THIS IS THE FINAL, GUARANTEED FIX ---
+// The baseURL MUST end with a trailing slash for Axios to resolve paths correctly.
 const api = axios.create({
-  baseURL: `${apiUrl}/api`,
+  baseURL: `${apiUrl}/api/`,
 });
+// --- END OF FIX ---
 
 let isRefreshing = false;
 let failedQueue = [];
@@ -33,10 +34,12 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    // Note: The URLs here will NOT have the /api prefix because axios removes the baseURL part
-    if (error.response?.status === 401 && (originalRequest.url === "/token/" || originalRequest.url === "/token/refresh/")) {
+    
+    // Check against the final part of the URL, as baseURL is now handled by axios
+    if (error.response?.status === 401 && (originalRequest.url === "token/" || originalRequest.url === "token/refresh/")) {
       return Promise.reject(error);
     }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise(function(resolve, reject) {
@@ -46,12 +49,13 @@ api.interceptors.response.use(
           return api(originalRequest);
         }).catch(err => { return Promise.reject(err); });
       }
+
       originalRequest._retry = true;
       isRefreshing = true;
+
       const refreshToken = localStorage.getItem(REFRESH_TOKEN);
       if (refreshToken) {
         try {
-          // This call must be made with the original axios to avoid interceptor loop
           const res = await axios.post(`${apiUrl}/api/token/refresh/`, { refresh: refreshToken });
           const newAccessToken = res.data.access;
           localStorage.setItem(ACCESS_TOKEN, newAccessToken);
@@ -62,6 +66,7 @@ api.interceptors.response.use(
           
           processQueue(null, newAccessToken);
           return api(originalRequest);
+
         } catch (refreshError) {
           processQueue(refreshError, null);
           localStorage.clear();

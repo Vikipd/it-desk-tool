@@ -39,10 +39,18 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return user
 
 # --- User Update Serializer ---
+# --- THIS IS THE FIX: Added 'username' to the fields list ---
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'first_name', 'last_name', 'phone_number', 'role')
+        # Admins can now update all core user details except the password from this form.
+        fields = ('id', 'username', 'first_name', 'last_name', 'phone_number', 'role')
+        extra_kwargs = {
+            # Last name is not required by the model, so no change is needed here.
+            # We will handle the visual '*' on the frontend.
+            'username': {'required': False},
+            'first_name': {'required': False},
+        }
 
 # --- Admin Password Reset Serializer ---
 class AdminPasswordResetSerializer(serializers.Serializer):

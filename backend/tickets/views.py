@@ -1,125 +1,216 @@
-# D:\it-admin-tool\backend\tickets\views.py
-
-from rest_framework import viewsets, permissions, filters, generics, status
+from rest_framework import viewsets, permissions, filters, generics, status, views
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Avg, F, ExpressionWrapper, DurationField
-from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
-import pandas as pd
-from io import BytesIO
-from .models import Ticket, Comment
-from .serializers import TicketSerializer, CommentSerializer
+from .models import Ticket, Comment, Card
+from .serializers import (
+    TicketDetailSerializer, 
+    TicketCreateSerializer, 
+    CommentSerializer, 
+    CardSerializer
+)
 from .filters import TicketFilter
-from django.contrib.auth import get_user_model
+from accounts.models import User
 
-User = get_user_model()
+# ==============================================================================
+# VIEWS FOR CASCADING DROPDOWNS & AUTOFILL
+# ==============================================================================
+
+class ZoneListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        zones = Card.objects.values_list('zone', flat=True).distinct().order_by('zone')
+        return Response(zones)
+
+class StateListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        zone = request.query_params.get('zone')
+        if not zone: return Response([])
+        states = Card.objects.filter(zone=zone).values_list('state', flat=True).distinct().order_by('state')
+        return Response(states)
+
+class NodeTypeListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        zone = request.query_params.get('zone')
+        state = request.query_params.get('state')
+        if not all([zone, state]): return Response([])
+        node_types = Card.objects.filter(zone=zone, state=state).values_list('node_type', flat=True).distinct().order_by('node_type')
+        return Response(node_types)
+
+class LocationListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        zone = request.query_params.get('zone'); state = request.query_params.get('state'); node_type = request.query_params.get('node_type')
+        if not all([zone, state, node_type]): return Response([])
+        locations = Card.objects.filter(zone=zone, state=state, node_type=node_type).values_list('location', flat=True).distinct().order_by('location')
+        return Response(locations)
+
+class CardTypeListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        zone = request.query_params.get('zone'); state = request.query_params.get('state'); node_type = request.query_params.get('node_type'); location = request.query_params.get('location')
+        if not all([zone, state, node_type, location]): return Response([])
+        card_types = Card.objects.filter(zone=zone, state=state, node_type=node_type, location=location).values_list('card_type', flat=True).distinct().order_by('card_type')
+        return Response(card_types)
+
+class SlotListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        zone = request.query_params.get('zone'); state = request.query_params.get('state'); node_type = request.query_params.get('node_type'); location = request.query_params.get('location'); card_type = request.query_params.get('card_type')
+        if not all([zone, state, node_type, location, card_type]): return Response([])
+        slots = Card.objects.filter(zone=zone, state=state, node_type=node_type, location=location, card_type=card_type).values_list('slot', flat=True).distinct().order_by('slot')
+        return Response(slots)
+
+class CardAutofillView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        params = {key: request.query_params.get(key) for key in ['zone', 'state', 'node_type', 'location', 'card_type', 'slot']}
+        if not all(params.values()):
+            return Response({'error': 'All filter parameters are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            card = Card.objects.get(**params)
+            serializer = CardSerializer(card)
+            return Response(serializer.data)
+        except Card.DoesNotExist:
+            return Response({'error': 'No matching card found.'}, status=status.HTTP_404_NOT_FOUND)
+        except Card.MultipleObjectsReturned:
+            cards = Card.objects.filter(**params)
+            serializer = CardSerializer(cards.first())
+            return Response(serializer.data)
+
+class FilteredCardDataView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request, field_name):
+        allowed_fields = ['node_name', 'primary_ip', 'aid', 'unit_part_number', 'clei']
+        if field_name not in allowed_fields:
+            return Response({'error': 'Invalid field name.'}, status=status.HTTP_400_BAD_REQUEST)
+        filters = { 'zone': request.query_params.get('zone'), 'state': request.query_params.get('state'), 'node_type': request.query_params.get('node_type'), 'location': request.query_params.get('location'), }
+        active_filters = {k: v for k, v in filters.items() if v}
+        if not active_filters: return Response([])
+        values = Card.objects.filter(**active_filters).values_list(field_name, flat=True).distinct().order_by(field_name)
+        return Response(values)
+
+# ==============================================================================
+# TICKET AND COMMENT VIEWSETS
+# ==============================================================================
 
 class TicketViewSet(viewsets.ModelViewSet):
-    # --- All other methods are correct and do not need changes ---
-    serializer_class = TicketSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = TicketFilter
-    search_fields = ['ticket_id', 'node_name', 'card_serial_number']
+    search_fields = [
+        'ticket_id', 
+        'card__node_name', 
+        'card__serial_number', 
+        'card__location', 
+        'card__state', 
+        'card__card_type',
+        'card__zone',
+        'status',
+        'priority',
+        'assigned_to__username',
+        'created_by__username'
+    ]
     ordering_fields = ['created_at', 'priority']
     
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser: return Ticket.objects.all().order_by('-created_at')
-        if hasattr(user, 'role') and user.role == 'OBSERVER': return Ticket.objects.all().order_by('-created_at')
-        if hasattr(user, 'role') and user.role == 'TECHNICIAN': return Ticket.objects.filter(assigned_to=user).order_by('-created_at')
-        return Ticket.objects.filter(created_by=user).order_by('-created_at')
-    
-    # ... (perform_create, partial_update, assign_ticket, dashboard_stats, card_main_categories all remain unchanged) ...
-    def perform_create(self, serializer): serializer.save(created_by=self.request.user)
-    def partial_update(self, request, *args, **kwargs):
-        ticket = self.get_object(); user = request.user; new_status = request.data.get('status'); new_priority = request.data.get('priority')
-        if new_status:
-            allowed_technician_statuses = ['IN_PROGRESS', 'IN_TRANSIT', 'UNDER_REPAIR', 'RESOLVED']
-            if user.role == 'TECHNICIAN' and new_status not in allowed_technician_statuses: return Response({'error': f'Technicians cannot set status to "{new_status}".'}, status=status.HTTP_403_FORBIDDEN)
-        if new_priority:
-            if not user.is_superuser: return Response({'error': 'Only Admins can change ticket priority.'}, status=status.HTTP_403_FORBIDDEN)
-        return super().partial_update(request, *args, **kwargs)
-    @action(detail=True, methods=['post'], url_path='assign', permission_classes=[permissions.IsAdminUser])
-    def assign_ticket(self, request, pk=None):
-        ticket = self.get_object(); technician_id = request.data.get('technician_id')
-        if not technician_id: return Response({'error': 'Technician ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-        try: technician = User.objects.get(pk=technician_id, role=User.TECHNICIAN)
-        except User.DoesNotExist: return Response({'error': 'Invalid Technician ID.'}, status=status.HTTP_404_NOT_FOUND)
-        ticket.assigned_to = technician; ticket.save(); serializer = self.get_serializer(ticket); return Response(serializer.data)
+        queryset = Ticket.objects.select_related('created_by', 'assigned_to', 'card').all()
+        if user.is_superuser or (hasattr(user, 'role') and user.role == 'OBSERVER'):
+            return queryset.order_by('-created_at')
+        if hasattr(user, 'role') and user.role == 'TECHNICIAN':
+            return queryset.filter(assigned_to=user).order_by('-created_at')
+        return queryset.filter(created_by=user).order_by('-created_at')
+        
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return TicketCreateSerializer
+        return TicketDetailSerializer
+
+    def perform_update(self, serializer):
+        ticket = serializer.instance
+        new_status = serializer.validated_data.get('status', ticket.status)
+        if new_status != ticket.status:
+            timestamp_field_map = {'IN_PROGRESS': 'in_progress_at', 'IN_TRANSIT': 'in_transit_at', 'UNDER_REPAIR': 'under_repair_at', 'ON_HOLD': 'on_hold_at', 'RESOLVED': 'resolved_at', 'CLOSED': 'closed_at'}
+            timestamp_field = timestamp_field_map.get(new_status)
+            if timestamp_field and not getattr(ticket, timestamp_field):
+                setattr(serializer.instance, timestamp_field, timezone.now())
+        new_assignee = serializer.validated_data.get('assigned_to', ticket.assigned_to)
+        if new_assignee and new_assignee != ticket.assigned_to and not ticket.assigned_at:
+             serializer.instance.assigned_at = timezone.now()
+        serializer.save()
+
+    @action(detail=True, methods=['patch'], url_path='edit-timestamps', permission_classes=[permissions.IsAdminUser])
+    def edit_timestamps(self, request, pk=None):
+        ticket = self.get_object()
+        serializer = self.get_serializer(ticket, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        for field, value in serializer.validated_data.items():
+            if field.endswith('_at'):
+                setattr(ticket, field, value)
+        ticket.save()
+        return Response(self.get_serializer(ticket).data)
+
     @action(detail=False, methods=['get'], url_path='dashboard-stats')
     def dashboard_stats(self, request):
-        user = self.request.user; response_data = {}
-        if user.is_superuser or (hasattr(user, 'role') and user.role == 'OBSERVER'): tickets_queryset = Ticket.objects.all(); response_data['total_users'] = User.objects.count()
-        else: tickets_queryset = self.get_queryset()
-        sla_complete_statuses = ['RESOLVED', 'CLOSED']; resolution_duration = ExpressionWrapper(F('closed_at') - F('created_at'), output_field=DurationField())
-        sla_data = Ticket.objects.filter(status__in=sla_complete_statuses, closed_at__isnull=False).values('priority').annotate(avg_resolution_duration=Avg(resolution_duration))
-        sla_dict = {item['priority']: item['avg_resolution_duration'].total_seconds() / (3600 * 24) for item in sla_data if item['avg_resolution_duration']}
-        by_priority_counts = tickets_queryset.values('priority').annotate(count=Count('priority')); by_priority_combined = []
+        user = self.request.user
+        response_data = {}
+        if user.is_superuser or (hasattr(user, 'role') and user.role == 'OBSERVER'):
+            tickets_queryset = Ticket.objects.all()
+            response_data['total_users'] = User.objects.filter(is_active=True).count()
+        else:
+            tickets_queryset = self.get_queryset()
+        
+        sla_complete_statuses = ['RESOLVED', 'CLOSED']
+        resolution_duration_expr = ExpressionWrapper(F('resolved_at') - F('created_at'), output_field=DurationField())
+        
+        sla_data = Ticket.objects.filter(
+            status__in=sla_complete_statuses, 
+            resolved_at__isnull=False,
+            created_at__isnull=False
+        ).values('priority').annotate(avg_resolution_duration=Avg(resolution_duration_expr))
+        
+        sla_dict = {
+            item['priority']: item['avg_resolution_duration'].total_seconds() / (3600 * 24) if item['avg_resolution_duration'] else 0
+            for item in sla_data
+        }
+        
+        by_priority_counts = tickets_queryset.values('priority').annotate(count=Count('priority'))
+        by_priority_combined = []
         for item in by_priority_counts:
-            priority = item['priority']; by_priority_combined.append({'priority': priority, 'count': item['count'], 'avg_resolution_days': sla_dict.get(priority, 0)})
-        total_tickets = tickets_queryset.count(); by_status = tickets_queryset.values('status').annotate(count=Count('status')); by_category = tickets_queryset.values('card_category').annotate(count=Count('card_category'))
-        response_data.update({'total_tickets': total_tickets, 'open_tickets': tickets_queryset.exclude(status__in=sla_complete_statuses).count(), 'closed_tickets': tickets_queryset.filter(status__in=sla_complete_statuses).count(), 'by_status': list(by_status), 'by_priority': by_priority_combined, 'by_category': list(by_category),})
-        return Response(response_data)
-    @action(detail=False, methods=['get'], url_path='card-main-categories')
-    def card_main_categories(self, request):
-        from .filters import CARD_CATEGORY_GROUPS
-        main_categories = list(CARD_CATEGORY_GROUPS.keys()); main_categories.append('Other'); return Response(main_categories, status=status.HTTP_200_OK)
-
-    # ==============================================================================
-    # --- START OF THE DEFINITIVE FIX ---
-    # ==============================================================================
-    @action(detail=False, methods=['get'], url_path='export')
-    def export_tickets(self, request):
-        # 1. Get the base queryset and apply any filters from the request URL.
-        # This now correctly handles calls from Client, Admin, and Filtered pages.
-        queryset = self.get_queryset()
-        filtered_queryset = self.filter_queryset(queryset)
-
-        # 2. Eagerly load related user data to prevent thousands of DB queries.
-        # This is a critical performance optimization.
-        final_queryset = filtered_queryset.select_related('created_by', 'assigned_to')
-
-        if not final_queryset.exists():
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        # 3. Prepare the data for the DataFrame.
-        data_for_df = []
-        for ticket in final_queryset:
-            data_for_df.append({
-                'Ticket ID': ticket.ticket_id,
-                'Node Name': ticket.node_name,
-                'Issue Description': ticket.fault_description,
-                'Card Category': ticket.card_category,
-                'Status': ticket.status,
-                'Priority': ticket.priority,
-                'Circle': ticket.circle,
-                'Assigned To': ticket.assigned_to.username if ticket.assigned_to else 'Unassigned',
-                'Created By': ticket.created_by.username if ticket.created_by else 'Unknown User',
-                'Created At': ticket.created_at.strftime('%Y-%m-%d %H:%M:%S') if ticket.created_at else ''
+            priority = item['priority']
+            by_priority_combined.append({
+                'priority': priority,
+                'count': item['count'],
+                'avg_resolution_days': sla_dict.get(priority, 0)
             })
-
-        # 4. Create the DataFrame and the Excel file.
-        df = pd.DataFrame(data_for_df)
         
-        excel_file = BytesIO()
-        df.to_excel(excel_file, index=False, sheet_name='Tickets Export')
-        excel_file.seek(0)
+        total_tickets = tickets_queryset.count()
+        by_status = tickets_queryset.values('status').annotate(count=Count('status'))
+        by_category = tickets_queryset.values('card__card_type').annotate(count=Count('id')).order_by('-count')
+        by_category_renamed = [{'card_category': item['card__card_type'], 'count': item['count']} for item in by_category]
+        resolved_tickets_count = tickets_queryset.filter(status='RESOLVED').count()
         
-        response = HttpResponse(excel_file.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = 'attachment; filename="tickets_export.xlsx"'
-        return response
-    # ==============================================================================
-    # --- END OF THE DEFINITIVE FIX ---
-    # ==============================================================================
+        response_data.update({
+            'total_tickets': total_tickets,
+            'resolved_tickets': resolved_tickets_count,
+            'by_status': list(by_status),
+            'by_priority': by_priority_combined,
+            'by_category': by_category_renamed,
+        })
+        return Response(response_data)
 
-# ... (Comment Views remain unchanged and correct) ...
-class CommentListCreateView(generics.ListCreateAPIView):
-    serializer_class = CommentSerializer; permission_classes = [permissions.IsAuthenticated]
-    def get_queryset(self): return Comment.objects.filter(ticket_id=self.kwargs['ticket_pk'])
-    def perform_create(self, serializer): ticket = get_object_or_404(Ticket, pk=self.kwargs['ticket_pk']); serializer.save(author=self.request.user, ticket=ticket)
 class CommentViewSet(viewsets.ModelViewSet):
-    queryset = Comment.objects.all(); serializer_class = CommentSerializer; permission_classes = [permissions.IsAuthenticated]
-    def perform_create(self, serializer): serializer.save(author=self.request.user)
+    queryset = Comment.objects.all()
+    serializer_class = CommentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    def get_queryset(self):
+        return Comment.objects.filter(ticket_id=self.kwargs.get('ticket_pk'))
+    def perform_create(self, serializer):
+        ticket = Ticket.objects.get(pk=self.kwargs.get('ticket_pk'))
+        serializer.save(author=self.request.user, ticket=ticket)
+        

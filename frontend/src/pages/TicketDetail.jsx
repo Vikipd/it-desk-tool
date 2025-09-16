@@ -1,257 +1,570 @@
-import { useAuth } from '../hooks/useAuth.js';
-import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import api from '../api.js';
-import { toast } from 'react-hot-toast';
-import { ArrowLeft, Send, Loader2, AlertTriangle, Lock } from 'lucide-react';
-import Select from 'react-select';
+import React, { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import api from "../api.js";
+import { toast } from "react-hot-toast";
+import {
+  ArrowLeft,
+  Send,
+  Loader2,
+  AlertTriangle,
+  Lock,
+  Download,
+  Edit,
+  Printer,
+} from "lucide-react";
+import Select from "react-select";
+import { useAuth } from "../hooks/useAuth.js";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
-
-// No changes needed in these child components
-const TicketActions = ({ ticket, role, onUpdate }) => {
-    const [isUpdating, setIsUpdating] = useState(false);
-    const handleStatusUpdate = async (newStatus) => {
-        setIsUpdating(true);
-        try {
-            const response = await api.patch(`/api/tickets/${ticket.id}/`, { status: newStatus });
-            toast.success(`Ticket status updated to "${response.data.status}"`);
-            onUpdate();
-        } catch (error) {
-            toast.error(error.response?.data?.error || "Failed to update status.");
-        } finally {
-            setIsUpdating(false);
+const DetailItem = ({ label, value, fullWidth = false }) => (
+  <div className={fullWidth ? "sm:col-span-2" : ""}>
+    <p className="text-sm font-medium text-gray-500">{label}</p>
+    <p className="mt-1 text-base text-gray-900 break-words">{value || "--"}</p>
+  </div>
+);
+const EngineerActions = ({ ticket, onUpdate }) => {
+  const [selectedAction, setSelectedAction] = useState(null);
+  const [otherReason, setOtherReason] = useState("");
+  const queryClient = useQueryClient();
+  const statusUpdateMutation = useMutation({
+    mutationFn: (data) => api.patch(`/api/tickets/${ticket.id}/`, data),
+    onSuccess: (updatedTicket) => {
+      toast.success(`Ticket status updated to "${updatedTicket.data.status}"`);
+      setSelectedAction(null);
+      setOtherReason("");
+      queryClient.invalidateQueries({ queryKey: ["ticket", ticket.id] });
+      onUpdate();
+    },
+    onError: (error) =>
+      toast.error(error.response?.data?.error || "Failed to update status."),
+  });
+  const commentMutation = useMutation({
+    mutationFn: (commentData) =>
+      api.post(`/api/tickets/${ticket.id}/comments/`, commentData),
+    onSuccess: () => {
+      toast.success("Reason for hold has been added as a comment.");
+      queryClient.invalidateQueries({ queryKey: ["ticket", ticket.id] });
+    },
+    onError: () => toast.error("Failed to add comment for hold reason."),
+  });
+  const handleActionSubmit = () => {
+    if (!selectedAction) return;
+    let statusUpdateData = { status: selectedAction.value };
+    if (selectedAction.value === "ON_HOLD") {
+      if (!otherReason.trim()) {
+        toast.error("A reason is required to put the ticket on hold.");
+        return;
+      }
+      commentMutation.mutate(
+        { text: `Ticket On Hold. Reason: ${otherReason}` },
+        {
+          onSuccess: () => {
+            statusUpdateMutation.mutate(statusUpdateData);
+          },
         }
-    };
-    const technicianActions = { 'OPEN': { label: 'Start Progress', nextStatus: 'IN_PROGRESS' }, 'IN_PROGRESS': { label: 'Mark as In Transit', nextStatus: 'IN_TRANSIT' }, 'IN_TRANSIT': { label: 'Mark as Under Repair', nextStatus: 'UNDER_REPAIR' }, 'UNDER_REPAIR': { label: 'Mark as Resolved', nextStatus: 'RESOLVED' } };
-    const adminActions = { 'RESOLVED': { label: 'Close Ticket', nextStatus: 'CLOSED' } };
-    const renderAction = (action) => (<button onClick={() => handleStatusUpdate(action.nextStatus)} disabled={isUpdating} className={`w-full text-white px-4 py-2 rounded-lg shadow transition disabled:bg-gray-400 ${action.nextStatus === 'CLOSED' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}>{isUpdating ? 'Updating...' : action.label}</button>);
-    if (role === 'TECHNICIAN' && technicianActions[ticket.status]) { return <div className="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 className="text-xl font-semibold mb-4">Actions</h2>{renderAction(technicianActions[ticket.status])}</div>; }
-    if (role === 'ADMIN' && adminActions[ticket.status]) { return <div className="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 className="text-xl font-semibold mb-4">Actions</h2>{renderAction(adminActions[ticket.status])}</div>; }
-    return null;
-};
-
-const AdminControls = ({ ticket, onUpdate }) => {
-    const [technicians, setTechnicians] = useState([]);
-    const [isAssigning, setIsAssigning] = useState(false);
-    useEffect(() => {
-        const fetchTechnicians = async () => {
-            try {
-                const response = await api.get('/api/technicians/');
-                setTechnicians(response.data);
-            } catch (error) {
-                toast.error("Could not load technician list.");
-            }
-        };
-        fetchTechnicians();
-    }, []);
-    const handleAssign = async (selectedOption) => {
-        setIsAssigning(true);
-        try {
-            const response = await api.patch(`/api/tickets/${ticket.id}/`, { assigned_to: selectedOption ? selectedOption.value : null });
-            toast.success(`Ticket assigned to ${response.data.assigned_to_username || 'Unassigned'}`);
-            onUpdate();
-        } catch (error) {
-            toast.error("Failed to assign ticket.");
-        } finally {
-            setIsAssigning(false);
-        }
-    };
-    const technicianOptions = technicians.map(tech => ({ value: tech.id, label: tech.username }));
-    const currentAssignee = technicianOptions.find(opt => opt.value === ticket.assigned_to);
-    const isClosed = ticket.status === 'CLOSED';
-    return (<div className="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 className="text-xl font-semibold mb-4">Assign Ticket</h2><Select options={technicianOptions} value={currentAssignee} onChange={handleAssign} isClearable={true} isLoading={isAssigning} placeholder={isClosed ? "Ticket is closed" : "Unassigned"} isDisabled={isClosed}/></div>);
-};
-
-const AdminPriorityControl = ({ ticket, onUpdate }) => {
-    const [isUpdating, setIsUpdating] = useState(false);
-    const priorityOptions = [{ value: "CRITICAL", label: "Critical" }, { value: "HIGH", label: "High" }, { value: "MEDIUM", label: "Medium" }, { value: "LOW", label: "Low" }];
-    const currentPriority = priorityOptions.find(opt => opt.value === ticket.priority);
-    const handlePriorityChange = async (selectedOption) => {
-        setIsUpdating(true);
-        try {
-            await api.patch(`/api/tickets/${ticket.id}/`, { priority: selectedOption.value });
-            toast.success("Priority updated!");
-            onUpdate();
-        } catch (error) {
-            toast.error(error.response?.data?.error || "Failed to update priority.");
-        } finally {
-            setIsUpdating(false);
-        }
-    };
-    const isClosed = ticket.status === 'CLOSED';
-    return (<div className="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 className="text-xl font-semibold mb-4">Change Priority</h2><Select options={priorityOptions} value={currentPriority} onChange={handlePriorityChange} isLoading={isUpdating} isDisabled={isClosed} placeholder={isClosed ? "Ticket is closed" : "Select priority"}/></div>);
-};
-
-
-// --- TICKET DETAIL COMPONENT (WITH THE DEFINITIVE FIX) ---
-const TicketDetail = () => {
-    const { id } = useParams();
-    const navigate = useNavigate();
-    const { role } = useAuth();
-    // const role = localStorage.getItem('role');
-
-    const [ticket, setTicket] = useState(null);
-    const [comments, setComments] = useState([]);
-    const [newComment, setNewComment] = useState('');
-    
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-
-    const fetchData = useCallback(async () => {
-        try {
-            const [ticketRes, commentsRes] = await Promise.all([
-                api.get(`/api/tickets/${id}/`),
-                api.get(`/api/tickets/${id}/comments/`)
-            ]);
-            setTicket(ticketRes.data);
-            setComments(commentsRes.data);
-        } catch (err) {
-            setError("Failed to load ticket details. You may not have permission to view this.");
-            if (err.response?.status === 401) {
-                toast.error("Your session has expired. Please log in again.");
-                navigate('/login');
-            }
-        } finally {
-            setIsLoading(false);
-        }
-    }, [id, navigate]);
-
-    useEffect(() => {
-        if (!role) {
-            navigate('/login');
-            return;
-        }
-        setIsLoading(true);
-        fetchData();
-    }, [id, role, navigate, fetchData]);
-    
-    const handleCommentSubmit = async (e) => {
-        e.preventDefault();
-        if (!newComment.trim() || ticket.status === 'CLOSED') return;
-
-        setIsSubmittingComment(true);
-        const toastId = toast.loading("Adding comment...");
-
-        try {
-            // THE DEFINITIVE FIX: Send the ticket ID along with the comment text.
-            // The backend requires this to associate the comment with the ticket.
-            const response = await api.post(`/api/tickets/${id}/comments/`, {
-                text: newComment,
-                ticket: id 
-            });
-            setComments(prevComments => [...prevComments, response.data]);
-            setNewComment('');
-            toast.success("Comment added successfully!", { id: toastId });
-        } catch (err) {
-            // More detailed error logging for future debugging, if needed.
-            console.error("COMMENT SUBMISSION ERROR:", err.response?.data || err.message);
-            const errorMessage = err.response?.data?.detail || "Failed to add comment.";
-            toast.error(errorMessage, { id: toastId });
-        } finally {
-            setIsSubmittingComment(false);
-        }
-    };
-    
-    if (isLoading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-blue-600" size={48} /></div>;
-    if (error) return <div className="text-center p-8 text-red-600 flex flex-col items-center"><AlertTriangle size={48} /><p className="mt-4 text-lg">{error}</p><button onClick={() => navigate(-1)} className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Go Back</button></div>;
-    if (!ticket) return <div className="text-center p-8 text-gray-600"><p>Ticket not found.</p></div>;
-
-    const isTicketClosed = ticket.status === 'CLOSED';
-
+      );
+    } else {
+      statusUpdateMutation.mutate(statusUpdateData);
+    }
+  };
+  const actionOptions = [
+    { value: "IN_PROGRESS", label: "Start Progress" },
+    { value: "IN_TRANSIT", label: "Mark as In Transit" },
+    { value: "UNDER_REPAIR", label: "Mark as Under Repair" },
+    { value: "RESOLVED", label: "Mark as Resolved" },
+    { value: "ON_HOLD", label: "On Hold (Other)" },
+  ];
+  const statusOrder = [
+    "OPEN",
+    "IN_PROGRESS",
+    "IN_TRANSIT",
+    "UNDER_REPAIR",
+    "RESOLVED",
+  ];
+  const currentStatusIndex = statusOrder.indexOf(ticket.status);
+  const filteredActions = actionOptions.filter((action) => {
+    if (ticket.status === "ON_HOLD") return false;
+    if (action.value === "ON_HOLD") return true;
+    const actionIndex = statusOrder.indexOf(action.value);
+    return actionIndex > currentStatusIndex;
+  });
+  if (ticket.status === "ON_HOLD") {
     return (
-        <div className="min-h-screen bg-gray-100 p-4 sm:p-8">
-            <div className="max-w-6xl mx-auto bg-white shadow-xl rounded-xl p-6 sm:p-8">
-                <div className="flex justify-between items-center mb-6">
-                    <div className="flex items-center">
-                        <button onClick={() => navigate(-1)} className="text-gray-600 hover:text-gray-900 transition-colors mr-4"><ArrowLeft size={24} /></button>
-                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 tracking-tight">Ticket #{ticket.ticket_id}</h1>
-                    </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div className="md:col-span-2 space-y-8">
-                        {/* Details Section */}
-                        <div className="bg-gray-50 p-6 rounded-lg shadow-sm">
-                            <h2 className="text-xl font-semibold mb-4 border-b pb-2">Details</h2>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-gray-700">
-                                <p><strong>Created By:</strong> {ticket.username}</p>
-                                <p><strong>Node Name:</strong> {ticket.node_name}</p>
-                                <p><strong>Circle:</strong> {ticket.circle}</p>
-                                <p><strong>BA/OA:</strong> {ticket.ba_oa}</p>
-                                <p><strong>Category:</strong> {ticket.card_category}</p>
-                                <p><strong>Priority:</strong> {ticket.priority}</p>
-                                <p><strong>Status:</strong> <span className="font-bold">{ticket.status}</span></p>
-                                <p><strong>Created At:</strong> {new Date(ticket.created_at).toLocaleString()}</p>
-                                {ticket.assigned_to_username && <p><strong>Assigned To:</strong> {ticket.assigned_to_username}</p>}
-                            </div>
-                            <div className="mt-6">
-                                <h3 className="text-lg font-semibold mb-2">Issue Description</h3>
-                                <p className="whitespace-pre-wrap bg-white p-3 rounded-md border">{ticket.fault_description}</p>
-                            </div>
-                        </div>
-                        
-                        {/* Comments Section */}
-                        <div className="bg-gray-50 p-6 rounded-lg shadow-sm">
-                            <h2 className="text-xl font-semibold mb-4 border-b pb-2">Comments</h2>
-                            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                                {comments.length > 0 ? (comments.map(comment => (
-                                    <div key={comment.id} className="p-4 bg-white rounded-lg shadow-sm border-l-4 border-blue-300">
-                                        <div className="flex justify-between items-center text-sm">
-                                            <p className="font-bold text-blue-800">{comment.author_username}</p>
-                                            <p className="text-gray-500">{new Date(comment.created_at).toLocaleString()}</p>
-                                        </div>
-                                        <p className="mt-2 text-gray-800">{comment.text}</p>
-                                    </div>
-                                ))) : (<p className="text-gray-500 italic">No comments yet.</p>)}
-                            </div>
-                            <form onSubmit={handleCommentSubmit} className="mt-6 flex items-center gap-2">
-                                <input 
-                                    type="text" 
-                                    value={newComment} 
-                                    onChange={(e) => setNewComment(e.target.value)} 
-                                    placeholder={isTicketClosed ? "Cannot comment on a closed ticket" : "Add a comment..."}
-                                    className="flex-grow border rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition disabled:bg-gray-200"
-                                    disabled={isSubmittingComment || isTicketClosed || role === 'OBSERVER'}
-                                />
-                                <button 
-                                    type="submit" 
-                                    className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed flex items-center justify-center w-12 h-10"
-                                    disabled={isSubmittingComment || !newComment.trim() || isTicketClosed || role === 'OBSERVER'}
-                                >
-                                    {isSubmittingComment ? <Loader2 className="animate-spin" size={20} /> : (isTicketClosed || role === 'OBSERVER'? <Lock size={20}/> : <Send size={20} />)}
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-
-                    {/* Right Sidebar */}
-                    <div className="md:col-span-1 space-y-8">
-
-                        {/* <TicketActions ticket={ticket} role={role} onUpdate={fetchData} /> */}
-                        {role !== 'OBSERVER' && <TicketActions ticket={ticket} role={role} onUpdate={fetchData} />}
-                        {role === 'ADMIN' && (
-                    <>
-                        <AdminControls ticket={ticket} onUpdate={fetchData} />
-                        <AdminPriorityControl ticket={ticket} onUpdate={fetchData} />
-                    </>
-                )}
-                        <div className="bg-gray-50 p-6 rounded-lg shadow-sm">
-                            <h2 className="text-xl font-semibold mb-4">Attachment</h2>
-                            {ticket.attachment ? (
-                                <a href={ticket.attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
-                                    View Attachment
-                                </a>
-                            ) : (
-                                <div className="h-24 flex items-center justify-center bg-gray-200 text-gray-500 rounded-lg">
-                                    No Attachment
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+      <Section title="Engineer Actions">
+        <button
+          onClick={() => statusUpdateMutation.mutate({ status: "IN_PROGRESS" })}
+          disabled={statusUpdateMutation.isPending}
+          className="w-full text-white px-4 py-2 rounded-lg shadow bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400"
+        >
+          {statusUpdateMutation.isPending ? "Resuming..." : "Resume Progress"}
+        </button>
+      </Section>
     );
+  }
+  if (
+    filteredActions.length === 0 ||
+    ticket.status === "RESOLVED" ||
+    ticket.status === "CLOSED"
+  )
+    return null;
+  return (
+    <Section title="Engineer Actions">
+      <div className="space-y-4">
+        <Select
+          options={filteredActions}
+          value={selectedAction}
+          onChange={setSelectedAction}
+          placeholder="Select an action..."
+        />
+        {selectedAction?.value === "ON_HOLD" && (
+          <textarea
+            value={otherReason}
+            onChange={(e) => setOtherReason(e.target.value)}
+            placeholder="Please provide a reason..."
+            className="w-full border rounded-md p-2 text-sm"
+            rows="3"
+          />
+        )}
+        <button
+          onClick={handleActionSubmit}
+          disabled={
+            !selectedAction ||
+            statusUpdateMutation.isPending ||
+            commentMutation.isPending
+          }
+          className="w-full text-white px-4 py-2 rounded-lg shadow bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400"
+        >
+          {statusUpdateMutation.isPending ? "Updating..." : "Confirm Action"}
+        </button>
+      </div>
+    </Section>
+  );
+};
+
+const TicketDetail = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { role } = useAuth();
+  const queryClient = useQueryClient();
+  const [newComment, setNewComment] = useState("");
+  const [isEditingTimestamps, setIsEditingTimestamps] = useState(false);
+  const [editableTimestamps, setEditableTimestamps] = useState({});
+  const {
+    data: ticket,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["ticket", id],
+    queryFn: async () => {
+      const res = await api.get(`/api/tickets/${id}/`);
+      setEditableTimestamps({
+        assigned_at: res.data.assigned_at
+          ? new Date(res.data.assigned_at)
+          : null,
+        in_progress_at: res.data.in_progress_at
+          ? new Date(res.data.in_progress_at)
+          : null,
+        resolved_at: res.data.resolved_at
+          ? new Date(res.data.resolved_at)
+          : null,
+        closed_at: res.data.closed_at ? new Date(res.data.closed_at) : null,
+      });
+      return res.data;
+    },
+  });
+  const commentMutation = useMutation({
+    mutationFn: (commentData) =>
+      api.post(`/api/tickets/${id}/comments/`, commentData),
+    onSuccess: () => {
+      setNewComment("");
+      queryClient.invalidateQueries({ queryKey: ["ticket", id] });
+      toast.success("Comment added!");
+    },
+    onError: () => toast.error("Failed to add comment."),
+  });
+  const adminMutation = useMutation({
+    mutationFn: (updateData) => api.patch(`/api/tickets/${id}/`, updateData),
+    onSuccess: () => {
+      refetch();
+      toast.success("Ticket updated successfully!");
+    },
+    onError: () => toast.error("Failed to update ticket."),
+  });
+  const timestampMutation = useMutation({
+    mutationFn: (timestampData) =>
+      api.patch(`/api/tickets/${id}/edit-timestamps/`, timestampData),
+    onSuccess: () => {
+      refetch();
+      setIsEditingTimestamps(false);
+      toast.success("Timestamps updated successfully!");
+    },
+    onError: () => toast.error("Failed to update timestamps."),
+  });
+  const handleCommentSubmit = (e) => {
+    e.preventDefault();
+    if (newComment.trim()) {
+      commentMutation.mutate({ text: newComment });
+    }
+  };
+  const handleAssign = (selectedOption) =>
+    adminMutation.mutate({
+      assigned_to: selectedOption ? selectedOption.value : null,
+    });
+  const handlePriorityChange = (selectedOption) =>
+    adminMutation.mutate({ priority: selectedOption.value });
+  const handleCloseTicket = () => adminMutation.mutate({ status: "CLOSED" });
+  const handleTimestampChange = (field, date) =>
+    setEditableTimestamps((prev) => ({ ...prev, [field]: date }));
+  const handleSaveTimestamps = () => {
+    const payload = Object.keys(editableTimestamps).reduce((acc, key) => {
+      acc[key] = editableTimestamps[key]
+        ? editableTimestamps[key].toISOString()
+        : null;
+      return acc;
+    }, {});
+    timestampMutation.mutate(payload);
+  };
+  const handlePrint = () => {
+    window.print();
+  };
+
+  if (isLoading)
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="animate-spin text-blue-600" size={48} />
+      </div>
+    );
+  if (error)
+    return (
+      <div className="text-center p-8 text-red-600">
+        <AlertTriangle size={48} />
+        <p className="mt-4">Failed to load ticket details.</p>
+      </div>
+    );
+
+  const cardDetails = ticket.card || {};
+  const timestampFields = [
+    "assigned_at",
+    "in_progress_at",
+    "in_transit_at",
+    "under_repair_at",
+    "on_hold_at",
+    "resolved_at",
+    "closed_at",
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-sans print:bg-white">
+      <div className="max-w-7xl mx-auto bg-white shadow-xl rounded-xl print:shadow-none">
+        <div className="p-6 sm:p-8 border-b flex justify-between items-center print:hidden">
+          <div className="flex items-center">
+            <button
+              onClick={() => navigate(-1)}
+              className="text-gray-600 hover:text-gray-900 mr-4"
+            >
+              <ArrowLeft size={24} />
+            </button>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
+              Ticket #{ticket.ticket_id}
+            </h1>
+          </div>
+          <button
+            onClick={handlePrint}
+            className="flex items-center text-sm font-semibold bg-gray-200 text-gray-800 px-3 py-2 rounded-lg hover:bg-gray-300"
+          >
+            <Printer size={16} className="mr-2" /> Print / Export PDF
+          </button>
+        </div>
+        {/* --- THIS IS THE FIX: Added print-specific layout classes --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6 sm:p-8 print:grid-cols-1">
+          <div className="lg:col-span-2 space-y-8 print:col-span-1">
+            <Section title="Hardware Details">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                <DetailItem label="Node Name" value={cardDetails.node_name} />
+                <DetailItem
+                  label="Serial Number"
+                  value={cardDetails.serial_number}
+                />
+                <DetailItem label="Primary IP" value={cardDetails.primary_ip} />
+                <DetailItem label="AID" value={cardDetails.aid} />
+                <DetailItem
+                  label="Unit Part Number"
+                  value={cardDetails.unit_part_number}
+                />
+                <DetailItem label="CLEI" value={cardDetails.clei} />
+                <DetailItem label="Zone" value={cardDetails.zone} />
+                <DetailItem label="State" value={cardDetails.state} />
+                <DetailItem label="Node Type" value={cardDetails.node_type} />
+                <DetailItem label="Location" value={cardDetails.location} />
+                <DetailItem label="Card Type" value={cardDetails.card_type} />
+                <DetailItem label="Slot" value={cardDetails.slot} />
+              </div>
+            </Section>
+            <Section title="Fault Details">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                <DetailItem
+                  label="Created By"
+                  value={ticket.created_by_username}
+                />
+                <DetailItem
+                  label="Assigned To"
+                  value={ticket.assigned_to_username}
+                />
+                <DetailItem label="Priority" value={ticket.priority} />
+                <DetailItem label="Status" value={ticket.status} />
+                <DetailItem
+                  label="Issue Description"
+                  value={ticket.fault_description}
+                  fullWidth
+                />
+                {ticket.other_card_type_description && (
+                  <DetailItem
+                    label="Other Card Type Info"
+                    value={ticket.other_card_type_description}
+                    fullWidth
+                  />
+                )}
+              </div>
+            </Section>
+            <Section title="Comments">
+              <div className="space-y-4 max-h-96 overflow-y-auto pr-2 print:max-h-full print:overflow-visible">
+                {ticket.comments
+                  ?.map((c) => <CommentItem key={c.id} comment={c} />)
+                  .reverse()}
+              </div>
+              <form
+                onSubmit={handleCommentSubmit}
+                className="mt-6 flex gap-2 print:hidden"
+              >
+                <input
+                  type="text"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder={
+                    ticket.status === "CLOSED"
+                      ? "Cannot comment on a closed ticket"
+                      : "Add a comment..."
+                  }
+                  className="flex-grow border rounded-md p-2"
+                  disabled={
+                    commentMutation.isPending ||
+                    ticket.status === "CLOSED" ||
+                    role === "OBSERVER"
+                  }
+                />
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 w-12 h-10 flex items-center justify-center"
+                  disabled={
+                    commentMutation.isPending ||
+                    !newComment.trim() ||
+                    ticket.status === "CLOSED" ||
+                    role === "OBSERVER"
+                  }
+                >
+                  {commentMutation.isPending ? (
+                    <Loader2 className="animate-spin" />
+                  ) : ticket.status === "CLOSED" || role === "OBSERVER" ? (
+                    <Lock />
+                  ) : (
+                    <Send />
+                  )}
+                </button>
+              </form>
+            </Section>
+          </div>
+          {/* The right sidebar is hidden on print, but its children are not */}
+          <div className="lg:col-span-1 space-y-8 print:space-y-0">
+            <div className="print:hidden">
+              {role === "TECHNICIAN" && (
+                <EngineerActions ticket={ticket} onUpdate={refetch} />
+              )}
+            </div>
+            <div className="print:hidden">
+              {role === "ADMIN" && (
+                <>
+                  <AdminAssign ticket={ticket} onAssign={handleAssign} />
+                  <AdminPriority
+                    ticket={ticket}
+                    onPriorityChange={handlePriorityChange}
+                  />
+                  {ticket.status === "RESOLVED" && (
+                    <Section title="Admin Actions">
+                      <button
+                        onClick={handleCloseTicket}
+                        disabled={adminMutation.isPending}
+                        className="w-full text-white px-4 py-2 rounded-lg shadow bg-green-600 hover:bg-green-700"
+                      >
+                        Close Ticket
+                      </button>
+                    </Section>
+                  )}
+                </>
+              )}
+            </div>
+            <Section title="Ticket History">
+              <div className="flex justify-end mb-2 print:hidden">
+                {role === "ADMIN" && (
+                  <>
+                    {!isEditingTimestamps ? (
+                      <button
+                        onClick={() => setIsEditingTimestamps(true)}
+                        className="flex items-center text-sm text-blue-600 hover:underline"
+                      >
+                        <Edit size={14} className="mr-1" /> Edit Timestamps
+                      </button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setIsEditingTimestamps(false)}
+                          className="text-sm"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSaveTimestamps}
+                          disabled={timestampMutation.isPending}
+                          className="text-sm font-semibold text-green-600 hover:underline"
+                        >
+                          {timestampMutation.isPending ? "Saving..." : "Save"}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="space-y-3">
+                <TimestampItem label="Created At" date={ticket.created_at} />
+                {timestampFields.map((field) =>
+                  isEditingTimestamps ? (
+                    <EditableTimestampItem
+                      key={field}
+                      label={field.replace(/_/g, " ").replace("at", "At")}
+                      selected={editableTimestamps[field]}
+                      onChange={(date) => handleTimestampChange(field, date)}
+                    />
+                  ) : (
+                    <TimestampItem
+                      key={field}
+                      label={field.replace(/_/g, " ").replace("at", "At")}
+                      date={ticket[field]}
+                    />
+                  )
+                )}
+              </div>
+            </Section>
+            <Section title="Attachment">
+              <div className="print:hidden">
+                {ticket.attachment ? (
+                  <a
+                    href={ticket.attachment}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center text-blue-600 hover:underline break-all"
+                  >
+                    <Download size={16} className="mr-2" /> View Attachment
+                  </a>
+                ) : (
+                  <p>No attachment provided.</p>
+                )}
+              </div>
+              <p className="hidden print:block">
+                {ticket.attachment
+                  ? "See digital record for attachment"
+                  : "No attachment provided."}
+              </p>
+            </Section>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Section = ({ title, children }) => (
+  <div className="bg-gray-50 p-6 rounded-lg shadow-sm print:shadow-none print:border print:border-gray-200 print:bg-white">
+    <h2 className="text-xl font-semibold mb-4 border-b pb-2">{title}</h2>
+    {children}
+  </div>
+);
+const CommentItem = ({ comment }) => (
+  <div className="p-4 bg-white rounded-lg border-l-4 border-blue-300 print:border-none print:bg-transparent print:p-0 print:mb-2">
+    <div className="flex justify-between text-sm">
+      <p className="font-bold text-blue-800">{comment.author_username}</p>
+      <p className="text-gray-500">
+        {new Date(comment.created_at).toLocaleString()}
+      </p>
+    </div>
+    <p className="mt-2 text-gray-800">{comment.text}</p>
+  </div>
+);
+const TimestampItem = ({ label, date }) =>
+  date ? (
+    <div className="flex justify-between items-center text-sm">
+      <p className="text-gray-600">{label}:</p>
+      <p className="font-semibold text-gray-800">
+        {new Date(date).toLocaleString()}
+      </p>
+    </div>
+  ) : null;
+const EditableTimestampItem = ({ label, selected, onChange }) => (
+  <div className="flex justify-between items-center text-sm">
+    <p className="text-gray-600">{label}:</p>
+    <DatePicker
+      selected={selected}
+      onChange={onChange}
+      showTimeSelect
+      dateFormat="Pp"
+      isClearable
+      className="w-full p-1 border rounded-md"
+    />
+  </div>
+);
+const AdminAssign = ({ ticket, onAssign }) => {
+  const { data: engineers, isLoading } = useQuery({
+    queryKey: ["engineers"],
+    queryFn: () => api.get("/api/technicians/").then((res) => res.data),
+  });
+  const engineerOptions =
+    engineers?.map((e) => ({ value: e.id, label: e.username })) || [];
+  const currentAssignee = engineerOptions.find(
+    (opt) => opt.value === ticket.assigned_to
+  );
+  return (
+    <Section title="Assign Engineer">
+      <Select
+        options={engineerOptions}
+        value={currentAssignee}
+        onChange={onAssign}
+        isClearable={true}
+        isLoading={isLoading}
+        placeholder="Unassigned"
+      />
+    </Section>
+  );
+};
+const AdminPriority = ({ ticket, onPriorityChange }) => {
+  const priorityOptions = [
+    { value: "CRITICAL", label: "Critical" },
+    { value: "HIGH", label: "High" },
+    { value: "MEDIUM", label: "Medium" },
+    { value: "LOW", label: "Low" },
+  ];
+  const currentPriority = priorityOptions.find(
+    (opt) => opt.value === ticket.priority
+  );
+  return (
+    <Section title="Change Priority">
+      <Select
+        options={priorityOptions}
+        value={currentPriority}
+        onChange={onPriorityChange}
+      />
+    </Section>
+  );
 };
 
 export default TicketDetail;

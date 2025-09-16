@@ -1,66 +1,100 @@
-# D:\it-admin-tool\backend\accounts\views.py
-
-# =================================================================
-# IMPORTS
-# =================================================================
-
-# Import the base view for handling token creation (login)
+from rest_framework import generics, permissions, status, views
+from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
-
-# Import the custom serializer WE created in serializers.py
-from .serializers import MyTokenObtainPairSerializer
-
-# Imports for your other views
-from rest_framework import generics, permissions
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from .serializers import UserSerializer
 from .models import User
+from .serializers import (
+    MyTokenObtainPairSerializer,
+    UserSerializer,
+    UserCreateSerializer,
+    UserUpdateSerializer,
+    AdminPasswordResetSerializer,
+    ChangePasswordSerializer # <-- MODIFICATION: Import new serializer
+)
+
+# --- NEW: Self-Service Password Change View ---
+class ChangePasswordView(generics.UpdateAPIView):
+    """
+    An endpoint for users to change their own password.
+    """
+    serializer_class = ChangePasswordSerializer
+    model = User
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_object(self, queryset=None):
+        # The object is the currently authenticated user
+        return self.request.user
+
+    def update(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            # The serializer's update method handles the password change
+            serializer.update(self.object, serializer.validated_data)
+            return Response({"detail": "Password updated successfully"}, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# =================================================================
-# TOKEN VIEW (LOGIN)
-# =================================================================
-
-# THIS IS THE CLASS THAT WAS MISSING
-# This view will handle the login request at the /api/token/ endpoint.
+# ... (rest of the file is unchanged)
+# MyTokenObtainPairView, UserListCreateView, UserRetrieveUpdateDestroyView, RestoreUserView, etc.
+# ...
 class MyTokenObtainPairView(TokenObtainPairView):
-    """
-    Takes a set of user credentials and returns an access and refresh JSON web
-    token pair. This view is customized to use our MyTokenObtainPairSerializer
-    which adds the user's 'role' to the token payload.
-    """
     serializer_class = MyTokenObtainPairSerializer
 
+class UserListCreateView(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return UserCreateSerializer
+        return UserSerializer
+    def get_queryset(self):
+        is_active_param = self.request.query_params.get('is_active', 'true')
+        is_active = is_active_param.lower() == 'true'
+        return User.objects.filter(is_active=is_active).order_by('username')
 
-# =================================================================
-# OTHER USER-RELATED VIEWS (These are fine, no changes needed)
-# =================================================================
+class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = User.objects.all()
+    permission_classes = [permissions.IsAdminUser]
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return UserUpdateSerializer
+        return UserSerializer
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_active = False
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class RestoreUserView(views.APIView):
+    permission_classes = [permissions.IsAdminUser]
+    def post(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk)
+            user.is_active = True
+            user.save()
+            return Response({"detail": "User restored successfully."}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+class AdminPasswordResetView(generics.UpdateAPIView):
+    queryset = User.objects.all()
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = AdminPasswordResetSerializer
+    def update(self, request, *args, **kwargs):
+        user = self.get_object()
+        serializer = self.get_serializer(user, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Password has been reset successfully."}, status=status.HTTP_200_OK)
 
 class UserDetailView(generics.RetrieveAPIView):
-    """
-    A view to retrieve the details of the currently authenticated user.
-    """
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
-
     def get_object(self):
         return self.request.user
 
-
-class UserListCreateView(generics.ListCreateAPIView):
-    """
-    A view for admins to list all users or create a new user.
-    Protected to be accessed only by admin users.
-    """
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [permissions.IsAdminUser]
-
-    
 class TechnicianListView(generics.ListAPIView):
-    """
-    A view for admins to get a list of all users with the 'TECHNICIAN' role.
-    """
-    queryset = User.objects.filter(role=User.TECHNICIAN)
+    queryset = User.objects.filter(role=User.TECHNICIAN, is_active=True).order_by('first_name')
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]

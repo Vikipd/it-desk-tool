@@ -1,13 +1,8 @@
-// D:\it-admin-tool\frontend\src\pages\ClientDashboard.jsx
-
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../hooks/useAuth.js";
 import React, { useEffect, useState, useCallback } from "react";
-// --- FIX: Corrected the typo from 'router-dom' to 'react-router-dom' ---
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast } from "react-hot-toast";
-// --- FIX: Silenced the intentional 'ArrowLeft' unused variable warning ---
-// eslint-disable-next-line no-unused-vars
 import {
   Loader2,
   AlertTriangle,
@@ -22,19 +17,23 @@ import {
 } from "lucide-react";
 import api from "../api.js";
 
-const SummaryCard = ({ title, value, icon, color }) => (
-  <div className="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-    <div className="flex items-center">
-      <div className={`mr-5 p-3 rounded-full ${color}`}>{icon}</div>
-      <div>
-        <p className="text-sm font-medium text-gray-500">{title}</p>
-        <p className="text-3xl font-bold text-gray-800 tracking-tight">
-          {value}
-        </p>
+const SummaryCard = ({ title, value, icon, color, to }) => {
+  const content = (
+    <div className="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+      <div className="flex items-center">
+        <div className={`mr-5 p-3 rounded-full ${color}`}>{icon}</div>
+        <div>
+          <p className="text-sm font-medium text-gray-500">{title}</p>
+          <p className="text-3xl font-bold text-gray-800 tracking-tight">
+            {value}
+          </p>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+  if (to) return <Link to={to}>{content}</Link>;
+  return content;
+};
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
@@ -57,19 +56,14 @@ const ClientDashboard = () => {
 
       const allTickets = ticketsResponse.data.results || ticketsResponse.data;
       setTickets(allTickets);
-
-      // --- FIX: This line uses 'profileResponse', fixing both the warning and the UI bug ---
       setUsername(profileResponse.data.username);
 
       const openTickets = allTickets.filter(
         (t) => t.status !== "CLOSED" && t.status !== "RESOLVED"
       ).length;
-      const closedTickets = allTickets.filter(
-        (t) => t.status === "CLOSED" || t.status === "RESOLVED"
-      ).length;
+      const closedTickets = allTickets.length - openTickets;
       setStats({ open: openTickets, closed: closedTickets });
     } catch (err) {
-      console.error("Failed to fetch client data:", err);
       setError("Failed to fetch your tickets. Please try again.");
     } finally {
       setIsLoading(false);
@@ -97,8 +91,10 @@ const ClientDashboard = () => {
     const rows = tickets.map((ticket) =>
       [
         `"${ticket.ticket_id}"`,
-        `"${ticket.node_name}"`,
-        `"${ticket.card_category}"`,
+        `"${ticket.card?.node_name || "N/A"}"`,
+        `"${
+          ticket.card?.card_type || ticket.other_card_type_description || "N/A"
+        }"`,
         `"${ticket.status}"`,
         `"${ticket.priority}"`,
         `"${new Date(ticket.created_at).toLocaleString()}"`,
@@ -114,12 +110,14 @@ const ClientDashboard = () => {
     link.click();
     document.body.removeChild(link);
   };
+
   const handleLogout = () => {
     localStorage.clear();
     navigate("/login");
     queryClient.clear();
     toast.success("Logged out successfully.");
   };
+
   const getStatusBadgeClass = (status) => {
     switch (status) {
       case "OPEN":
@@ -175,7 +173,7 @@ const ClientDashboard = () => {
             {(role === "ADMIN" || role === "OBSERVER") && (
               <button
                 onClick={() => navigate("/admin-dashboard")}
-                className="flex items-center font-semibold bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-all duration-300 shadow-sm hover:shadow-md"
+                className="flex items-center font-semibold bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 shadow-sm"
               >
                 <ArrowLeft size={18} className="mr-2" /> Back to Main Dashboard
               </button>
@@ -183,20 +181,20 @@ const ClientDashboard = () => {
             {role === "CLIENT" && (
               <button
                 onClick={() => navigate("/ticket-form")}
-                className="flex items-center font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-sm hover:shadow-md"
+                className="flex items-center font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-sm"
               >
                 <PlusCircle size={18} className="mr-2" /> Submit Ticket
               </button>
             )}
             <button
               onClick={handleExport}
-              className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-all duration-300 shadow-sm hover:shadow-md"
+              className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-sm"
             >
               <FileDown size={18} className="mr-2" /> Export
             </button>
             <button
               onClick={handleLogout}
-              className="flex items-center font-semibold bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-all duration-300 shadow-sm hover:shadow-md"
+              className="flex items-center font-semibold bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 shadow-sm"
             >
               <LogOut size={18} className="mr-2" /> Logout
             </button>
@@ -210,18 +208,21 @@ const ClientDashboard = () => {
             value={tickets.length}
             icon={<Ticket size={24} className="text-blue-600" />}
             color="bg-blue-100"
+            to="/filtered-tickets"
           />
           <SummaryCard
             title="Open Tickets"
             value={stats.open}
             icon={<Clock size={24} className="text-yellow-600" />}
             color="bg-yellow-100"
+            to="/filtered-tickets?status=OPEN"
           />
           <SummaryCard
             title="Closed Tickets"
             value={stats.closed}
             icon={<CheckCircle size={24} className="text-green-600" />}
             color="bg-green-100"
+            to="/filtered-tickets?status=CLOSED"
           />
         </div>
         <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200/80">
@@ -234,7 +235,7 @@ const ClientDashboard = () => {
           </div>
           {tickets.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="min-w-full">
+              <table className="min-w-full w-full">
                 <thead className="bg-slate-50 border-b border-gray-200">
                   <tr>
                     <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
@@ -273,10 +274,12 @@ const ClientDashboard = () => {
                         {ticket.ticket_id}
                       </td>
                       <td className="py-5 px-6 text-gray-800">
-                        {ticket.node_name}
+                        {ticket.card?.node_name || "N/A"}
                       </td>
-                      <td className="py-5 px-6 text-gray-600">
-                        {ticket.card_category}
+                      <td className="py-5 px-6 text-gray-800">
+                        {ticket.card?.card_type ||
+                          ticket.other_card_type_description ||
+                          "N/A"}
                       </td>
                       <td className="py-5 px-6">
                         <span

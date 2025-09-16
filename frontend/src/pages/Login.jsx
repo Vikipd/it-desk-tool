@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 import { toast } from "react-hot-toast";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, AlertCircle } from "lucide-react";
 import { ACCESS_TOKEN, REFRESH_TOKEN } from "../constants";
 import { jwtDecode } from "jwt-decode";
 
@@ -11,7 +11,29 @@ function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
   const navigate = useNavigate();
+
+  // --- MODIFICATION START: Create two separate, stable handlers ---
+  // This is the guaranteed fix. Each input now has its own dedicated
+  // function to update its state and clear any existing error messages.
+  
+  const handleUsernameChange = (e) => {
+    setUsername(e.target.value);
+    // If there's an error message showing, clear it as the user is typing.
+    if (loginError) {
+      setLoginError("");
+    }
+  };
+
+  const handlePasswordChange = (e) => {
+    setPassword(e.target.value);
+    // If there's an error message showing, clear it as the user is typing.
+    if (loginError) {
+      setLoginError("");
+    }
+  };
+  // --- MODIFICATION END ---
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -21,31 +43,40 @@ function Login() {
     }
     setIsLoading(true);
     try {
-      // THIS IS THE FINAL, CORRECTED LINE
       const response = await api.post("/api/token/", { username, password });
-
       const { access, refresh } = response.data;
       const decodedToken = jwtDecode(access);
+
+      const mustChangePassword = decodedToken.must_change_password;
       const role = decodedToken.role?.trim().toUpperCase();
+
       localStorage.setItem(ACCESS_TOKEN, access);
       localStorage.setItem(REFRESH_TOKEN, refresh);
       localStorage.setItem("role", role);
+      
       toast.success("Login successful!");
-      const destination = {
-        ADMIN: "/admin-dashboard",
-        OBSERVER: "/admin-dashboard",
-        CLIENT: "/client-dashboard",
-        TECHNICIAN: "/technician-dashboard",
-      }[role];
-      if (destination) {
-        navigate(destination);
+
+      if (mustChangePassword) {
+        navigate("/change-password");
       } else {
-        toast.error("Unsupported user role.");
-        localStorage.clear();
+        const destination = {
+          ADMIN: "/admin-dashboard",
+          OBSERVER: "/admin-dashboard",
+          CLIENT: "/client-dashboard",
+          TECHNICIAN: "/technician-dashboard",
+        }[role];
+
+        if (destination) {
+          navigate(destination);
+        } else {
+          toast.error("Unsupported user role.");
+          localStorage.clear();
+        }
       }
     } catch (err) {
       const detail = err.response?.data?.detail;
-      toast.error(detail || "Invalid credentials or server error.");
+      const errorMessage = detail || "Invalid username or password. Please try again.";
+      setLoginError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -54,7 +85,7 @@ function Login() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4 font-sans">
       <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col lg:flex-row">
-        <div className="w-full lg:w-1/2 flex flex-col justify-center bg-blue-600 p-12 text-white">
+        <div className="w-full lg:w-1/2 flex flex-col justify-center items-center text-center bg-blue-600 p-12 text-white">
           <h1 className="text-4xl font-bold tracking-tight">
             Fault Booking Tool
           </h1>
@@ -78,7 +109,8 @@ function Login() {
                 <input
                   type="text"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  // --- MODIFICATION: Use the new dedicated username handler ---
+                  onChange={handleUsernameChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
@@ -91,23 +123,31 @@ function Login() {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    // --- MODIFICATION: Use the new dedicated password handler ---
+                    onChange={handlePasswordChange}
                     className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 rounded-r-lg text-gray-400 hover:text-gray-600 cursor-pointer transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     aria-label={
                       showPassword ? "Hide password" : "Show password"
                     }
-                    tabIndex="-1"
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
               </div>
+
+              {loginError && (
+                <div className="flex items-center space-x-2 text-red-600 text-sm font-semibold p-3 bg-red-50 rounded-lg">
+                  <AlertCircle size={20} />
+                  <span>{loginError}</span>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={isLoading}
@@ -122,4 +162,5 @@ function Login() {
     </div>
   );
 }
+
 export default Login;

@@ -1,272 +1,685 @@
-import React, { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import api from "../api";
 import { toast } from "react-hot-toast";
 import Select from "react-select";
-import { useQuery } from "@tanstack/react-query";
-import { groupedLocationsData, zonesData } from "../data/locationsData";
+import { ArrowLeft, UploadCloud } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 
-// Your custom styles are preserved
+const formatOptions = (data) =>
+  data ? data.map((item) => ({ value: item, label: item })) : [];
 const customStyles = {
-  control: (provided, state) => ({
-    ...provided,
-    borderRadius: "0.75rem",
-    padding: "0.25rem",
-    borderColor: state.isFocused ? "#6366f1" : "#d1d5db",
-    boxShadow: state.isFocused ? "0 0 0 2px #c7d2fe" : "none",
-    "&:hover": {
-      borderColor: state.isFocused ? "#6366f1" : "#d1d5db",
-    },
-    transition: "all 0.2s ease-in-out",
-  }),
-  option: (provided, state) => ({
-    ...provided,
-    backgroundColor: state.isSelected ? "#6366f1" : state.isHovered ? "#eef2ff" : "white",
-    color: state.isSelected ? "white" : "#1f2937",
-    cursor: "pointer",
-  }),
+  control: (base) => ({ ...base, padding: "0.25rem", borderRadius: "0.75rem" }),
 };
 
-// Your data functions are preserved
-const fetchNodeNameData = async () => {
-  return [
-    { value: "PSS-32", label: "PSS-32" }, { value: "PSS-16II", label: "PSS-16II" }, { value: "PSS-8", label: "PSS-8" }, { value: "PSS-24X", label: "PSS-24X" },
-  ];
-};
-
-const fetchPriorityData = async () => {
-  return [
-    { value: "CRITICAL", label: "Critical" }, { value: "HIGH", label: "High" }, { value: "MEDIUM", label: "Medium" }, { value: "LOW", label: "Low" },
-  ];
-};
-
-const cardCategoryData = [
-  { value: "2UX200", label: "2UX200" }, { value: "2UX500", label: "2UX500" }, { value: "5MX500", label: "5MX500" }, { value: "20AX200", label: "20AX200" }, { value: "IR9", label: "IR9" }, { value: "IR4 (DWDM)", label: "IR4 (DWDM)" }, { value: "ASG (Amplifier)", label: "ASG (Amplifier)" }, { value: "8EC2", label: "8EC2" }, { value: "32EC2", label: "32EC2" }, { value: "20MX80", label: "20MX80" }, { value: "12XCEC2", label: "12XCEC2" }, { value: "XST12T", label: "XST12T" }, { value: "Other", label: "Other" },
-];
-
-const zoneToStateMapping = {
-    'North Zone': ['Chandigarh', 'Delhi', 'Haryana', 'Himachal Pradesh', 'Punjab', 'Rajasthan', 'Uttar Pradesh', 'Uttarakhand'],
-    'South Zone': ['Andhra Pradesh', 'Karnataka', 'Kerala', 'Tamil Nadu', 'Telangana', 'Puducherry', 'Lakshadweep', 'Andaman and Nicobar Islands'],
-    'East Zone': ['Bihar', 'Jharkhand', 'Odisha', 'West Bengal', 'Sikkim'],
-    'West Zone': ['Dadra and Nagar Haveli and Daman and Diu', 'Goa', 'Gujarat', 'Maharashtra'],
-    'Central Zone': ['Chhattisgarh', 'Madhya Pradesh'],
-    'North-East Zone': ['Arunachal Pradesh', 'Assam', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Tripura']
+const ManualApiSelect = ({
+  value,
+  onChange,
+  fieldName,
+  queryParams,
+  placeholder,
+  isDisabled,
+}) => {
+  const { data, isLoading } = useQuery({
+    queryKey: ["filteredData", fieldName, queryParams],
+    queryFn: () =>
+      api
+        .get(`/api/cards/filtered-data/${fieldName}/`, { params: queryParams })
+        .then((res) => res.data),
+    enabled: !isDisabled,
+  });
+  return (
+    <Select
+      value={value}
+      onChange={onChange}
+      options={formatOptions(data)}
+      isLoading={isLoading}
+      isDisabled={isDisabled}
+      placeholder={placeholder}
+      styles={customStyles}
+    />
+  );
 };
 
 function TicketForm() {
-  // Your state management is preserved
   const navigate = useNavigate();
   const { role } = useAuth();
-  const [formData, setFormData] = useState({
-    node_name: null, card_serial_number: "", fault_description: "", circle: null, node_location: null, ba_oa: "", card_category: null, other_card_description: "", priority: null, attachment: null,
-  });
-  const [formErrors, setFormErrors] = useState({});
+
+  // State for selections
+  const [selectedZone, setSelectedZone] = useState(null);
+  const [selectedState, setSelectedState] = useState(null);
+  const [selectedNodeType, setSelectedNodeType] = useState(null);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [selectedCardType, setSelectedCardType] = useState(null);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [autofilledData, setAutofilledData] = useState(null);
+  const [faultDescription, setFaultDescription] = useState("");
+  const [otherCardDescription, setOtherCardDescription] = useState("");
+  const [selectedPriority, setSelectedPriority] = useState(null);
+  const [attachment, setAttachment] = useState(null);
   const [fileName, setFileName] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false); // Added for button loading state
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: nodeNameData, isLoading: isNodeNameLoading } = useQuery({ queryKey: ["node_names"], queryFn: fetchNodeNameData });
-  const { data: priorityData, isLoading: isPriorityLoading } = useQuery({ queryKey: ["priorities"], queryFn: fetchPriorityData });
+  // State for manual "Other" mode
+  const [manualNodeName, setManualNodeName] = useState(null);
+  const [manualPrimaryIp, setManualPrimaryIp] = useState(null);
+  const [manualAid, setManualAid] = useState(null);
+  const [manualUnitPartNumber, setManualUnitPartNumber] = useState(null);
+  const [manualClei, setManualClei] = useState(null);
+  const [manualSlot, setManualSlot] = useState("");
+  const [manualSerialNumber, setManualSerialNumber] = useState("");
 
-  const isLoading = isNodeNameLoading || isPriorityLoading;
+  // --- Data Fetching ---
+  const { data: zones, isLoading: isLoadingZones } = useQuery({
+    queryKey: ["zones"],
+    queryFn: () => api.get("/api/cards/zones/").then((res) => res.data),
+  });
+  const { data: states, isLoading: isLoadingStates } = useQuery({
+    queryKey: ["states", selectedZone],
+    queryFn: () =>
+      api
+        .get("/api/cards/states/", { params: { zone: selectedZone?.value } })
+        .then((res) => res.data),
+    enabled: !!selectedZone,
+  });
+  const { data: nodeTypes, isLoading: isLoadingNodeTypes } = useQuery({
+    queryKey: ["nodeTypes", selectedState],
+    queryFn: () =>
+      api
+        .get("/api/cards/node-types/", {
+          params: { zone: selectedZone?.value, state: selectedState?.value },
+        })
+        .then((res) => res.data),
+    enabled: !!selectedState,
+  });
+  const { data: locations, isLoading: isLoadingLocations } = useQuery({
+    queryKey: ["locations", selectedNodeType],
+    queryFn: () =>
+      api
+        .get("/api/cards/locations/", {
+          params: {
+            zone: selectedZone?.value,
+            state: selectedState?.value,
+            node_type: selectedNodeType?.value,
+          },
+        })
+        .then((res) => res.data),
+    enabled: !!selectedNodeType,
+  });
+  const { data: cardTypes, isLoading: isLoadingCardTypes } = useQuery({
+    queryKey: ["cardTypes", selectedLocation],
+    queryFn: async () => {
+      const res = await api.get("/api/cards/card-types/", {
+        params: {
+          zone: selectedZone?.value,
+          state: selectedState?.value,
+          node_type: selectedNodeType?.value,
+          location: selectedLocation?.value,
+        },
+      });
+      return ["Other", ...res.data];
+    },
+    enabled: !!selectedLocation,
+  });
+  const { data: slots, isLoading: isLoadingSlots } = useQuery({
+    queryKey: ["slots", selectedCardType],
+    queryFn: () =>
+      api
+        .get("/api/cards/slots/", {
+          params: {
+            zone: selectedZone?.value,
+            state: selectedState?.value,
+            node_type: selectedNodeType?.value,
+            location: selectedLocation?.value,
+            card_type: selectedCardType?.value,
+          },
+        })
+        .then((res) => res.data),
+    enabled: !!selectedCardType && selectedCardType?.value !== "Other",
+  });
+  const { isFetching: isAutofilling } = useQuery({
+    queryKey: ["autofill", selectedSlot],
+    queryFn: async () => {
+      const params = {
+        zone: selectedZone.value,
+        state: selectedState.value,
+        node_type: selectedNodeType.value,
+        location: selectedLocation.value,
+        card_type: selectedCardType.value,
+        slot: selectedSlot.value,
+      };
+      const res = await api.get("/api/cards/autofill/", { params });
+      setAutofilledData(res.data);
+      return res.data;
+    },
+    enabled: !!selectedSlot && selectedCardType?.value !== "Other",
+    retry: false,
+  });
 
-  const nodeLocationOptions = useMemo(() => {
-    const selectedCircleLabel = formData.circle?.label;
-    if (!selectedCircleLabel) return [];
-    const statesInZone = zoneToStateMapping[selectedCircleLabel];
-    if (!statesInZone) return [];
-    return groupedLocationsData
-      .filter(stateGroup => statesInZone.includes(stateGroup.label))
-      .map(stateGroup => ({
-        label: stateGroup.label,
-        options: stateGroup.options.map(district => ({ ...district, stateLabel: stateGroup.label }))
-      }));
-  }, [formData.circle]);
-
-  // All your handler functions are preserved
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+  // --- Event Handlers ---
+  const handleSelectChange = (setter, resetFields) => (option) => {
+    setter(option);
+    resetFields.forEach((fieldSetter) => fieldSetter(null));
+    setAutofilledData(null);
   };
-
-  const handleSelectChange = (selectedOption, { name }) => {
-    setFormData((prevData) => {
-      const newData = { ...prevData, [name]: selectedOption };
-      if (name === "card_category" && selectedOption?.value !== "Other") {
-        newData.other_card_description = "";
-      }
-      return newData;
-    });
+  const handleCardTypeChange = (option) => {
+    setSelectedCardType(option);
+    setSelectedSlot(null);
+    setAutofilledData(null);
+    if (option?.value !== "Other") {
+      setOtherCardDescription("");
+    }
   };
-
-  const handleCircleChange = (selectedOption) => {
-    setFormData((prevData) => ({ ...prevData, circle: selectedOption, node_location: null }));
-  };
-
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    setFormData({ ...formData, attachment: file });
+    if (file && file.size > 10 * 1024 * 1024) {
+      toast.error("File size cannot exceed 10MB.");
+      return;
+    }
+    setAttachment(file);
     setFileName(file ? file.name : "");
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    const errors = {};
-    if (!formData.node_name) errors.node_name = "Node Name is required.";
-    if (!formData.card_serial_number) errors.card_serial_number = "Card Serial Number is required.";
-    if (!formData.fault_description) errors.fault_description = "Fault Description is required.";
-    if (!formData.circle) errors.circle = "Circle is required.";
-    if (!formData.node_location) errors.node_location = "Node/Location is required.";
-    if (!formData.ba_oa) errors.ba_oa = "BA/OA is required.";
-    if (!formData.card_category) errors.card_category = "Card Category is required.";
-    if (formData.card_category?.value === "Other" && !formData.other_card_description) {
-      errors.other_card_description = 'Description is required for "Other" category.';
+    const isManualMode = selectedCardType?.value === "Other";
+    if (!isManualMode && !autofilledData) {
+      toast.error("Please complete hardware selections to identify the card.");
+      return;
     }
-    if (!formData.priority) errors.priority = "Priority is required.";
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      toast.error("Please fill in all required fields.");
-      setIsSubmitting(false);
+    if (
+      isManualMode &&
+      (!selectedZone ||
+        !selectedState ||
+        !selectedNodeType ||
+        !selectedLocation ||
+        !manualNodeName ||
+        !manualSlot ||
+        !manualSerialNumber)
+    ) {
+      toast.error("Please fill all required manual hardware details.");
+      return;
+    }
+    if (!faultDescription.trim()) {
+      toast.error("Fault Description is required.");
+      return;
+    }
+    if (!selectedPriority) {
+      toast.error("Priority is required.");
+      return;
+    }
+    if (isManualMode && !otherCardDescription.trim()) {
+      toast.error('Description is required for "Other" Card Type.');
       return;
     }
 
+    setIsSubmitting(true);
     const data = new FormData();
-    data.append("node_name", formData.node_name.value);
-    data.append("card_serial_number", formData.card_serial_number);
-    data.append("fault_description", formData.fault_description);
-    data.append("circle", formData.circle.label);
-    data.append("node_location", formData.node_location.value);
-    data.append("ba_oa", formData.ba_oa);
-    if (formData.card_category.value === "Other") {
-      data.append("card_category", formData.other_card_description);
-    } else {
-      data.append("card_category", formData.card_category.value);
+    data.append("fault_description", faultDescription);
+    data.append("priority", selectedPriority.value);
+    if (attachment) {
+      data.append("attachment", attachment);
     }
-    data.append("priority", formData.priority.value);
-    if (formData.attachment) {
-      data.append("attachment", formData.attachment);
+
+    if (isManualMode) {
+      data.append("other_card_type_description", otherCardDescription);
+      data.append("zone", selectedZone.value);
+      data.append("state", selectedState.value);
+      data.append("node_type", selectedNodeType.value);
+      data.append("location", selectedLocation.value);
+      data.append("manual_node_name", manualNodeName.value);
+      data.append("manual_primary_ip", manualPrimaryIp?.value || "");
+      data.append("manual_aid", manualAid?.value || "");
+      data.append("manual_unit_part_number", manualUnitPartNumber?.value || "");
+      data.append("manual_clei", manualClei?.value || "");
+      data.append("manual_slot", manualSlot);
+      data.append("manual_serial_number", manualSerialNumber);
+    } else {
+      data.append("serial_number", autofilledData.serial_number);
     }
 
     try {
-      // ========= THIS IS THE ONLY CHANGE MADE TO YOUR FILE =========
-      // The required "/api" prefix has been added to the endpoint.
-      await api.post("/api/tickets/", data, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      // ========= END OF THE FIX =========
+      await api.post("/api/tickets/", data);
       toast.success("Ticket created successfully!");
-      navigate("/client-dashboard");
+      navigate(role === "CLIENT" ? "/client-dashboard" : "/admin-dashboard");
     } catch (err) {
-      console.error("Failed to create ticket:", err.response || err);
-      if (err.response && err.response.data) {
-          const serverErrors = Object.entries(err.response.data)
-                                     .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
-                                     .join(' \n');
-          toast.error(`Submission failed:\n${serverErrors}`, { duration: 6000 });
+      const errorData = err.response?.data;
+      if (errorData && typeof errorData === "object") {
+        const errorMessages = Object.entries(errorData)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join("\n");
+        toast.error(`Submission failed:\n${errorMessages}`);
       } else {
-          toast.error("Failed to create ticket. Please check your network connection.");
+        toast.error(errorData || "Failed to create ticket.");
       }
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  // Your entire JSX structure is preserved exactly as you wrote it.
+  const isManualMode = selectedCardType?.value === "Other";
+  const canFetchManualOptions =
+    !!selectedZone &&
+    !!selectedState &&
+    !!selectedNodeType &&
+    !!selectedLocation;
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
-      <div className="w-full max-w-6xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col lg:flex-row-reverse">
-        <div className="w-full lg:w-1/2 p-8 sm:p-10 lg:p-12">
-          <div className="mb-6 text-center lg:text-left">
-            <h2 className="text-3xl font-extrabold text-gray-900">Submit New Ticket</h2>
-            <p className="mt-1 text-sm text-gray-500">Fill out the form below to submit a support request.</p>
+    <div className="min-h-screen bg-gray-50 p-4 lg:p-8 flex items-center justify-center font-sans">
+      <div className="w-full max-w-6xl bg-white rounded-3xl shadow-2xl overflow-hidden">
+        <div className="p-8 sm:p-10 lg:p-12">
+          <div className="flex items-center mb-6">
+            <Link to={-1} className="text-gray-500 hover:text-gray-800 mr-4">
+              <ArrowLeft size={24} />
+            </Link>
+            <div>
+              <h2 className="text-3xl font-extrabold text-gray-900">
+                Submit New Ticket
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Fill out the form to identify hardware and submit a request.
+              </p>
+            </div>
           </div>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="node_name" className="block text-sm font-medium text-gray-700">Node Name</label>
-                <Select id="node_name" name="node_name" value={formData.node_name} onChange={handleSelectChange} options={nodeNameData} isLoading={isNodeNameLoading} styles={customStyles} placeholder="Select Node Name..." className="mt-1" />
-                {formErrors.node_name && (<p className="mt-1 text-xs text-red-600">{formErrors.node_name}</p>)}
-              </div>
-              <div>
-                <label htmlFor="card_serial_number" className="block text-sm font-medium text-gray-700">Card Serial Number</label>
-                <input type="text" id="card_serial_number" name="card_serial_number" value={formData.card_serial_number} onChange={handleChange} placeholder="Enter card identifier" className={`mt-1 block w-full px-4 py-3 rounded-xl border ${formErrors.card_serial_number ? "border-red-500" : "border-gray-300"} shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all text-sm`} required />
-                {formErrors.card_serial_number && (<p className="mt-1 text-xs text-red-600">{formErrors.card_serial_number}</p>)}
-              </div>
-            </div>
-            <div>
-              <label htmlFor="fault_description" className="block text-sm font-medium text-gray-700">Fault Description</label>
-              <textarea id="fault_description" name="fault_description" value={formData.fault_description} onChange={handleChange} rows="3" placeholder="Detailed description of your problem" className={`mt-1 block w-full px-4 py-3 rounded-xl border ${formErrors.fault_description ? "border-red-500" : "border-gray-300"} shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all text-sm`} required></textarea>
-              {formErrors.fault_description && (<p className="mt-1 text-xs text-red-600">{formErrors.fault_description}</p>)}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="circle" className="block text-sm font-medium text-gray-700">Circle</label>
-                <Select id="circle" name="circle" value={formData.circle} onChange={handleCircleChange} options={zonesData} styles={customStyles} placeholder="Select Circle..." className="mt-1" />
-                {formErrors.circle && (<p className="mt-1 text-xs text-red-600">{formErrors.circle}</p>)}
-              </div>
-              <div>
-                <label htmlFor="node_location" className="block text-sm font-medium text-gray-700">Node/Location</label>
-                <Select id="node_location" name="node_location" value={formData.node_location} onChange={handleSelectChange} options={nodeLocationOptions} styles={customStyles} placeholder="Type a state or district..." className="mt-1" isDisabled={!formData.circle} filterOption={(option, inputValue) => { const lowerInput = inputValue.toLowerCase(); const districtMatch = option.label.toLowerCase().includes(lowerInput); const stateMatch = option.data.stateLabel.toLowerCase().includes(lowerInput); return districtMatch || stateMatch; }} />
-                {formErrors.node_location && (<p className="mt-1 text-xs text-red-600">{formErrors.node_location}</p>)}
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="ba_oa" className="block text-sm font-medium text-gray-700">BA / OA</label>
-                <input type="text" id="ba_oa" name="ba_oa" value={formData.ba_oa} onChange={handleChange} placeholder="Enter BA / OA" className={`mt-1 block w-full px-4 py-3 rounded-xl border ${formErrors.ba_oa ? "border-red-500" : "border-gray-300"} shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all text-sm`} required />
-                {formErrors.ba_oa && (<p className="mt-1 text-xs text-red-600">{formErrors.ba_oa}</p>)}
-              </div>
-              <div>
-                <label htmlFor="card_category" className="block text-sm font-medium text-gray-700">Card Category</label>
-                <Select id="card_category" name="card_category" value={formData.card_category} onChange={handleSelectChange} options={cardCategoryData} styles={customStyles} placeholder="Select Card..." className="mt-1" />
-                {formErrors.card_category && (<p className="mt-1 text-xs text-red-600">{formErrors.card_category}</p>)}
-              </div>
-            </div>
-            {formData.card_category?.value === "Other" && (
-              <div>
-                <label htmlFor="other_card_description" className="block text-sm font-medium text-gray-700">Other Card Description</label>
-                <input type="text" id="other_card_description" name="other_card_description" value={formData.other_card_description} onChange={handleChange} placeholder="e.g., Special I/O Card" maxLength="50" className={`mt-1 block w-full px-4 py-3 rounded-xl border ${formErrors.other_card_description ? "border-red-500" : "border-gray-300"} shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all text-sm`} required />
-                {formErrors.other_card_description && (<p className="mt-1 text-xs text-red-600">{formErrors.other_card_description}</p>)}
-              </div>
-            )}
-            <div>
-              <label htmlFor="priority" className="block text-sm font-medium text-gray-700">Priority</label>
-              <Select id="priority" name="priority" value={formData.priority} onChange={handleSelectChange} options={priorityData} isLoading={isPriorityLoading} styles={customStyles} placeholder="Select Priority..." className="mt-1" />
-              {formErrors.priority && (<p className="mt-1 text-xs text-red-600">{formErrors.priority}</p>)}
-            </div>
-            <div>
-              <label htmlFor="attachment" className="block text-sm font-medium text-gray-700">Attachment</label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl">
-                <div className="space-y-1 text-center">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-20m32 0a4 4 0 00-4-4H12a4 4 0 00-4 4m20 20v-4m0-4h4m-4-4h4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  <div className="flex text-sm text-gray-600">
-                    <label htmlFor="attachment-file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
-                      <span>{fileName || "Upload a file"}</span>
-                      <input id="attachment-file-upload" name="attachment" type="file" className="sr-only" onChange={handleFileChange} accept="image/*,.pdf,.doc,.docx,.txt" />
-                    </label>
-                    {!fileName && <p className="pl-1">or drag and drop</p>}
-                  </div>
-                  <p className="text-xs text-gray-500">Any file type up to 10MB</p>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <fieldset className="p-4 border rounded-lg">
+              <legend className="px-2 text-lg font-semibold text-blue-700">
+                Hardware Identification
+              </legend>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Zone
+                  </label>
+                  <Select
+                    value={selectedZone}
+                    onChange={handleSelectChange(setSelectedZone, [
+                      setSelectedState,
+                      setSelectedNodeType,
+                      setSelectedLocation,
+                      setSelectedCardType,
+                      setSelectedSlot,
+                    ])}
+                    options={formatOptions(zones)}
+                    isLoading={isLoadingZones}
+                    placeholder="Select Zone..."
+                    styles={customStyles}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    State
+                  </label>
+                  <Select
+                    value={selectedState}
+                    onChange={handleSelectChange(setSelectedState, [
+                      setSelectedNodeType,
+                      setSelectedLocation,
+                      setSelectedCardType,
+                      setSelectedSlot,
+                    ])}
+                    options={formatOptions(states)}
+                    isLoading={isLoadingStates}
+                    isDisabled={!selectedZone || isLoadingStates}
+                    placeholder="Select State..."
+                    styles={customStyles}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Node Type
+                  </label>
+                  <Select
+                    value={selectedNodeType}
+                    onChange={handleSelectChange(setSelectedNodeType, [
+                      setSelectedLocation,
+                      setSelectedCardType,
+                      setSelectedSlot,
+                    ])}
+                    options={formatOptions(nodeTypes)}
+                    isLoading={isLoadingNodeTypes}
+                    isDisabled={!selectedState || isLoadingNodeTypes}
+                    placeholder="Select Node Type..."
+                    styles={customStyles}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Location
+                  </label>
+                  <Select
+                    value={selectedLocation}
+                    onChange={handleSelectChange(setSelectedLocation, [
+                      setSelectedCardType,
+                      setSelectedSlot,
+                    ])}
+                    options={formatOptions(locations)}
+                    isLoading={isLoadingLocations}
+                    isDisabled={!selectedNodeType || isLoadingLocations}
+                    placeholder="Select Location..."
+                    styles={customStyles}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Card Type
+                  </label>
+                  <Select
+                    value={selectedCardType}
+                    onChange={handleCardTypeChange}
+                    options={formatOptions(cardTypes)}
+                    isLoading={isLoadingCardTypes}
+                    isDisabled={!selectedLocation || isLoadingCardTypes}
+                    placeholder="Select Card Type..."
+                    styles={customStyles}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Slot
+                  </label>
+                  <Select
+                    value={selectedSlot}
+                    onChange={handleSelectChange(setSelectedSlot, [])}
+                    options={formatOptions(slots)}
+                    isLoading={isLoadingSlots}
+                    isDisabled={
+                      !selectedCardType || isLoadingSlots || isManualMode
+                    }
+                    placeholder={
+                      isManualMode ? "N/A for Other" : "Select Slot..."
+                    }
+                    styles={customStyles}
+                  />
                 </div>
               </div>
-            </div>
-            <button type="submit" disabled={isLoading || isSubmitting || role === 'OBSERVER'} className="w-full py-3 text-base font-semibold text-white bg-indigo-600 rounded-xl shadow-lg hover:bg-indigo-700 transition-colors duration-200 disabled:bg-indigo-400 disabled:cursor-not-allowed">
-              {role === 'OBSERVER' ? 'Viewing as Observer' : (isSubmitting ? "Submitting..." : "Submit Ticket")}
+            </fieldset>
+
+            {(autofilledData || isAutofilling) && !isManualMode && (
+              <fieldset className="p-4 border rounded-lg bg-gray-50">
+                <legend className="px-2 text-lg font-semibold text-orange-700">
+                  Verified Card Details
+                </legend>
+                {isAutofilling ? (
+                  <p className="text-center">Verifying...</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                    <div className="lg:col-span-3">
+                      <InputField
+                        label="Node Name"
+                        value={autofilledData.node_name}
+                        readOnly
+                      />
+                    </div>
+                    <InputField
+                      label="Primary IP"
+                      value={autofilledData.primary_ip}
+                      readOnly
+                    />
+                    <InputField
+                      label="AID"
+                      value={autofilledData.aid}
+                      readOnly
+                    />
+                    <InputField
+                      label="Serial Number"
+                      value={autofilledData.serial_number}
+                      readOnly
+                    />
+                    <InputField
+                      label="Unit Part Number"
+                      value={autofilledData.unit_part_number}
+                      readOnly
+                    />
+                    <InputField
+                      label="CLEI"
+                      value={autofilledData.clei}
+                      readOnly
+                    />
+                  </div>
+                )}
+              </fieldset>
+            )}
+
+            {isManualMode && (
+              <fieldset className="p-4 border rounded-lg bg-yellow-50">
+                <legend className="px-2 text-lg font-semibold text-yellow-800">
+                  Manual Hardware Details
+                </legend>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                  <div className="lg:col-span-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Node Name
+                    </label>
+                    <ManualApiSelect
+                      value={manualNodeName}
+                      onChange={setManualNodeName}
+                      fieldName="node_name"
+                      queryParams={{
+                        zone: selectedZone?.value,
+                        state: selectedState?.value,
+                        node_type: selectedNodeType?.value,
+                        location: selectedLocation?.value,
+                      }}
+                      placeholder="Select Node Name..."
+                      isDisabled={!canFetchManualOptions}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Primary IP
+                    </label>
+                    <ManualApiSelect
+                      value={manualPrimaryIp}
+                      onChange={setManualPrimaryIp}
+                      fieldName="primary_ip"
+                      queryParams={{
+                        zone: selectedZone?.value,
+                        state: selectedState?.value,
+                        node_type: selectedNodeType?.value,
+                        location: selectedLocation?.value,
+                      }}
+                      placeholder="Select Primary IP..."
+                      isDisabled={!canFetchManualOptions}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      AID
+                    </label>
+                    <ManualApiSelect
+                      value={manualAid}
+                      onChange={setManualAid}
+                      fieldName="aid"
+                      queryParams={{
+                        zone: selectedZone?.value,
+                        state: selectedState?.value,
+                        node_type: selectedNodeType?.value,
+                        location: selectedLocation?.value,
+                      }}
+                      placeholder="Select AID..."
+                      isDisabled={!canFetchManualOptions}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Unit Part Number
+                    </label>
+                    <ManualApiSelect
+                      value={manualUnitPartNumber}
+                      onChange={setManualUnitPartNumber}
+                      fieldName="unit_part_number"
+                      queryParams={{
+                        zone: selectedZone?.value,
+                        state: selectedState?.value,
+                        node_type: selectedNodeType?.value,
+                        location: selectedLocation?.value,
+                      }}
+                      placeholder="Select Part Number..."
+                      isDisabled={!canFetchManualOptions}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      CLEI
+                    </label>
+                    <ManualApiSelect
+                      value={manualClei}
+                      onChange={setManualClei}
+                      fieldName="clei"
+                      queryParams={{
+                        zone: selectedZone?.value,
+                        state: selectedState?.value,
+                        node_type: selectedNodeType?.value,
+                        location: selectedLocation?.value,
+                      }}
+                      placeholder="Select CLEI..."
+                      isDisabled={!canFetchManualOptions}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Slot
+                    </label>
+                    <input
+                      type="text"
+                      value={manualSlot}
+                      onChange={(e) => setManualSlot(e.target.value)}
+                      placeholder="Enter Slot Number"
+                      className="mt-1 block w-full px-4 py-3 rounded-xl border-gray-300"
+                      required={isManualMode}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Serial Number
+                    </label>
+                    <input
+                      type="text"
+                      value={manualSerialNumber}
+                      onChange={(e) => setManualSerialNumber(e.target.value)}
+                      placeholder="Enter Serial Number"
+                      className="mt-1 block w-full px-4 py-3 rounded-xl border-gray-300"
+                      required={isManualMode}
+                    />
+                  </div>
+                </div>
+              </fieldset>
+            )}
+
+            <fieldset className="p-4 border rounded-lg">
+              <legend className="px-2 text-lg font-semibold text-gray-800">
+                Fault Information
+              </legend>
+              <div className="space-y-4 pt-2">
+                {isManualMode && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Other Card Type Description
+                    </label>
+                    <input
+                      type="text"
+                      value={otherCardDescription}
+                      onChange={(e) => setOtherCardDescription(e.target.value)}
+                      placeholder="Please specify the card type"
+                      className="mt-1 block w-full px-4 py-3 rounded-xl border border-gray-300"
+                      required
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Fault Description
+                  </label>
+                  <textarea
+                    value={faultDescription}
+                    onChange={(e) => setFaultDescription(e.target.value)}
+                    rows="4"
+                    placeholder="Detailed description of the problem..."
+                    className="mt-1 block w-full px-4 py-3 rounded-xl border border-gray-300"
+                    required
+                  ></textarea>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Priority
+                    </label>
+                    <Select
+                      value={selectedPriority}
+                      onChange={setSelectedPriority}
+                      options={[
+                        { value: "CRITICAL", label: "Critical" },
+                        { value: "HIGH", label: "High" },
+                        { value: "MEDIUM", label: "Medium" },
+                        { value: "LOW", label: "Low" },
+                      ]}
+                      placeholder="Select Priority..."
+                      styles={customStyles}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Attachment
+                    </label>
+                    <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl">
+                      <div className="space-y-1 text-center">
+                        <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
+                        <div className="flex text-sm text-gray-600">
+                          <label
+                            htmlFor="attachment-file"
+                            className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500"
+                          >
+                            <span>{fileName || "Upload a file"}</span>
+                            <input
+                              id="attachment-file"
+                              name="attachment"
+                              type="file"
+                              className="sr-only"
+                              onChange={handleFileChange}
+                            />
+                          </label>
+                          {!fileName && (
+                            <p className="pl-1">or drag and drop</p>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Any file type up to 10MB
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </fieldset>
+            <button
+              type="submit"
+              disabled={isSubmitting || isAutofilling || role === "OBSERVER"}
+              className="w-full py-3 text-base font-semibold text-white bg-indigo-600 rounded-xl shadow-lg hover:bg-indigo-700 disabled:bg-indigo-400"
+            >
+              {role === "OBSERVER"
+                ? "Viewing as Observer"
+                : isSubmitting
+                ? "Submitting..."
+                : "Submit Ticket"}
             </button>
           </form>
-        </div>
-        <div className="relative hidden lg:flex w-1/2 items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 p-12">
-          <div className="text-center text-white">
-            <svg className="mx-auto h-24 w-24 text-white mb-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.75 17L12 19.25L14.25 17L12 14.75L9.75 17ZM12 4.75V2.75M12 21.25V19.25M4.75 12H2.75M21.25 12H19.25M6.25 6.25L4.5 4.5M19.5 19.5L17.75 17.75M17.75 6.25L19.5 4.5M4.5 19.5L6.25 17.75" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 15a3 3 0 100-6 3 3 0 000 6z" /></svg>
-            <h3 className="text-4xl font-extrabold tracking-tight">We're here to help.</h3>
-            <p className="mt-4 text-lg font-medium opacity-80">Your support is our priority.</p>
-          </div>
         </div>
       </div>
     </div>
   );
 }
+
+const InputField = ({ label, value, readOnly }) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-700">{label}</label>
+    <input
+      type="text"
+      value={value || ""}
+      readOnly={readOnly}
+      className="mt-1 block w-full px-4 py-3 rounded-xl border-gray-300 bg-gray-100 cursor-not-allowed"
+    />
+  </div>
+);
 
 export default TicketForm;

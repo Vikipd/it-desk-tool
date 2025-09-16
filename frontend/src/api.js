@@ -1,7 +1,12 @@
 import axios from "axios";
 import { ACCESS_TOKEN, REFRESH_TOKEN } from "./constants";
 
-const apiUrl = "http://127.0.0.1:8000";
+// --- THIS IS THE GUARANTEED FIX for DEPLOYMENT ---
+// This line tells the application:
+// 1. If we are running a production build (npm run build), use the API URL we provide in the command.
+// 2. Otherwise, for local development (npm start), default to the local server.
+const apiUrl = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+// --- END OF FIX ---
 
 const api = axios.create({
   baseURL: apiUrl,
@@ -37,13 +42,9 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // --- THIS IS THE GUARANTEED FIX ---
-    // If the error is a 401 and the request was for the login or refresh token endpoint,
-    // we must NOT try to refresh the token. We just pass the error along.
-    if (error.response.status === 401 && originalRequest.url.includes("/api/token")) {
+    if (error.response?.status === 401 && originalRequest.url.includes("/api/token")) {
       return Promise.reject(error);
     }
-    // --- END OF FIX ---
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {

@@ -37,7 +37,7 @@ const UserManagementPage = () => {
 
   const fetchUsers = async (tab) => {
     const isActive = tab === "active";
-    const response = await api.get(`/api/users/?is_active=${isActive}`);
+    const response = await api.get(`/users/?is_active=${isActive}`);
     return response.data;
   };
 

@@ -43,7 +43,7 @@ function Login() {
     }
     setIsLoading(true);
     try {
-      const response = await api.post("/api/token/", { username, password });
+      const response = await api.post("/token/", { username, password });
       const { access, refresh } = response.data;
       const decodedToken = jwtDecode(access);
 

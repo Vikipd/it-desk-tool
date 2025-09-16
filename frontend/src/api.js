@@ -1,16 +1,13 @@
 import axios from "axios";
 import { ACCESS_TOKEN, REFRESH_TOKEN } from "./constants";
 
-// The apiUrl will be just the server's base address.
 const apiUrl = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
-// --- THIS IS THE GUARANTEED FIX ---
-// We create the axios instance and set its baseURL to include the crucial '/api' prefix.
-// This ensures ALL requests (api.get('/users'), api.post('/tickets'), etc.) are sent to the correct endpoint.
+// --- THIS IS THE FIX ---
+// The baseURL for all api calls will be the server address PLUS /api/
 const api = axios.create({
   baseURL: `${apiUrl}/api`,
 });
-// --- END OF FIX ---
 
 let isRefreshing = false;
 let failedQueue = [];
@@ -36,12 +33,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-
-    // This check is now simpler because baseURL is handled by axios
-    if (error.response?.status === 401 && originalRequest.url === "/token/") {
+    // Note: The URLs here will NOT have the /api prefix because axios removes the baseURL part
+    if (error.response?.status === 401 && (originalRequest.url === "/token/" || originalRequest.url === "/token/refresh/")) {
       return Promise.reject(error);
     }
-
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise(function(resolve, reject) {
@@ -51,14 +46,12 @@ api.interceptors.response.use(
           return api(originalRequest);
         }).catch(err => { return Promise.reject(err); });
       }
-
       originalRequest._retry = true;
       isRefreshing = true;
-
       const refreshToken = localStorage.getItem(REFRESH_TOKEN);
       if (refreshToken) {
         try {
-          // The refresh call also uses the full, correct URL now
+          // This call must be made with the original axios to avoid interceptor loop
           const res = await axios.post(`${apiUrl}/api/token/refresh/`, { refresh: refreshToken });
           const newAccessToken = res.data.access;
           localStorage.setItem(ACCESS_TOKEN, newAccessToken);
@@ -69,7 +62,6 @@ api.interceptors.response.use(
           
           processQueue(null, newAccessToken);
           return api(originalRequest);
-
         } catch (refreshError) {
           processQueue(refreshError, null);
           localStorage.clear();

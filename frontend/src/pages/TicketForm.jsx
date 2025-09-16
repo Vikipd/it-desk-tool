@@ -73,7 +73,7 @@ function TicketForm() {
   // --- Data Fetching ---
   const { data: zones, isLoading: isLoadingZones } = useQuery({
     queryKey: ["zones"],
-    queryFn: () => api.get("/api/cards/zones/").then((res) => res.data),
+    queryFn: () => api.get("/cards/zones/").then((res) => res.data),
   });
   const { data: states, isLoading: isLoadingStates } = useQuery({
     queryKey: ["states", selectedZone],

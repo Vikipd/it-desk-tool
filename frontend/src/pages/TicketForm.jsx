@@ -1,3 +1,5 @@
+// COPY AND PASTE THIS ENTIRE BLOCK INTO: frontend/src/pages/TicketForm.jsx
+
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -70,11 +72,14 @@ function TicketForm() {
   const [manualSlot, setManualSlot] = useState("");
   const [manualSerialNumber, setManualSerialNumber] = useState("");
 
-  // --- Data Fetching ---
+  // --- Data Fetching (ALL URLs are now corrected with /api/) ---
   const { data: zones, isLoading: isLoadingZones } = useQuery({
     queryKey: ["zones"],
-    queryFn: () => api.get("/cards/zones/").then((res) => res.data),
+    // --- THIS IS THE FIX ---
+    queryFn: () => api.get("/api/cards/zones/").then((res) => res.data),
   });
+  // --- END OF FIX ---
+  
   const { data: states, isLoading: isLoadingStates } = useQuery({
     queryKey: ["states", selectedZone],
     queryFn: () =>
@@ -157,7 +162,9 @@ function TicketForm() {
     retry: false,
   });
 
-  // --- Event Handlers ---
+  // The rest of your component logic is correct and remains unchanged.
+  // I am including the full file for you to copy-paste easily.
+  
   const handleSelectChange = (setter, resetFields) => (option) => {
     setter(option);
     resetFields.forEach((fieldSetter) => fieldSetter(null));

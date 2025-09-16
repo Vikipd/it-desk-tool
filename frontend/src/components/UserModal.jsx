@@ -1,3 +1,5 @@
+// COPY AND PASTE THIS ENTIRE BLOCK INTO: frontend/src/components/UserModal.jsx
+
 import React, { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { X, Eye, EyeOff, KeyRound } from "lucide-react";
@@ -44,19 +46,20 @@ const UserModal = ({ user, onClose, onSave }) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // --- FIX: All API endpoints now correctly start with '/api/'. ---
   const { mutate, isPending: isLoading } = useMutation({
     mutationFn: async (userData) => {
       if (isEditMode) {
         const payload = {
-          username: userData.username, // Username is now included
+          username: userData.username,
           first_name: userData.first_name,
           last_name: userData.last_name,
           phone_number: userData.phone_number,
           role: userData.role,
         };
-        return api.put(`/users/${user.id}/`, payload);
+        return api.put(`/api/users/${user.id}/`, payload);
       } else {
-        return api.post("/users/", userData);
+        return api.post("/api/users/", userData);
       }
     },
     onSuccess: () => {
@@ -83,7 +86,7 @@ const UserModal = ({ user, onClose, onSave }) => {
 
   const { mutate: resetPassword, isPending: isResetting } = useMutation({
     mutationFn: (passwordData) =>
-      api.put(`/users/${user.id}/reset-password/`, passwordData),
+      api.put(`/api/users/${user.id}/reset-password/`, passwordData),
     onSuccess: () => {
       toast.success("Password reset successfully!");
       setShowPasswordReset(false);
@@ -97,6 +100,8 @@ const UserModal = ({ user, onClose, onSave }) => {
       toast.error(errorDetail);
     },
   });
+  // --- END OF FIX ---
+
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
@@ -113,6 +118,9 @@ const UserModal = ({ user, onClose, onSave }) => {
     }
     resetPassword({ password: newPassword });
   };
+  
+  // The rest of your component remains the same.
+  // Just copy the whole block above and paste it.
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
@@ -138,7 +146,6 @@ const UserModal = ({ user, onClose, onSave }) => {
               required
               placeholder="e.g., John"
             />
-            {/* --- FIX: Removed 'required' prop from Last Name --- */}
             <InputField
               label="Last Name"
               name="last_name"
@@ -148,7 +155,6 @@ const UserModal = ({ user, onClose, onSave }) => {
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* --- FIX: Removed 'disabled' prop from Username --- */}
             <InputField
               label="Username"
               name="username"
@@ -358,17 +364,7 @@ const UserModal = ({ user, onClose, onSave }) => {
 };
 
 const InputField = ({
-  label,
-  name,
-  value,
-  onChange,
-  type = "text",
-  required = false,
-  disabled = false,
-  placeholder = "",
-  maxLength,
-  pattern,
-  title,
+  label, name, value, onChange, type = "text", required = false, disabled = false, placeholder = "", maxLength, pattern, title,
 }) => (
   <div>
     <label htmlFor={name} className="block text-sm font-medium text-gray-700">

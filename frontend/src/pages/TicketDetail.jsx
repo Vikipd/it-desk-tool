@@ -1,3 +1,5 @@
+// COPY AND PASTE THIS ENTIRE BLOCK INTO: frontend/src/pages/TicketDetail.jsx
+
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -151,6 +153,7 @@ const TicketDetail = () => {
   const [newComment, setNewComment] = useState("");
   const [isEditingTimestamps, setIsEditingTimestamps] = useState(false);
   const [editableTimestamps, setEditableTimestamps] = useState({});
+
   const {
     data: ticket,
     isLoading,
@@ -160,21 +163,34 @@ const TicketDetail = () => {
     queryKey: ["ticket", id],
     queryFn: async () => {
       const res = await api.get(`/api/tickets/${id}/`);
-      setEditableTimestamps({
-        assigned_at: res.data.assigned_at
-          ? new Date(res.data.assigned_at)
-          : null,
-        in_progress_at: res.data.in_progress_at
-          ? new Date(res.data.in_progress_at)
-          : null,
-        resolved_at: res.data.resolved_at
-          ? new Date(res.data.resolved_at)
-          : null,
-        closed_at: res.data.closed_at ? new Date(res.data.closed_at) : null,
+      const ticketData = res.data;
+
+      // --- FIX: THIS IS THE MODIFIED, CORRECTED LOGIC ---
+      // We define ALL possible timestamp fields here.
+      const allTimestampFields = [
+        "assigned_at",
+        "in_progress_at",
+        "in_transit_at",
+        "under_repair_at",
+        "on_hold_at",
+        "resolved_at",
+        "closed_at",
+      ];
+      
+      // We dynamically create the state object by looping through the fields.
+      // For each field, if the ticket has a date for it, we convert it to a Date object.
+      // Otherwise, we set it to null. This ensures ALL fields are accounted for.
+      const initialTimestamps = {};
+      allTimestampFields.forEach(field => {
+        initialTimestamps[field] = ticketData[field] ? new Date(ticketData[field]) : null;
       });
-      return res.data;
+      setEditableTimestamps(initialTimestamps);
+      // --- END OF FIX ---
+
+      return ticketData;
     },
   });
+
   const commentMutation = useMutation({
     mutationFn: (commentData) =>
       api.post(`/api/tickets/${id}/comments/`, commentData),
@@ -278,7 +294,6 @@ const TicketDetail = () => {
             <Printer size={16} className="mr-2" /> Print / Export PDF
           </button>
         </div>
-        {/* --- THIS IS THE FIX: Added print-specific layout classes --- */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6 sm:p-8 print:grid-cols-1">
           <div className="lg:col-span-2 space-y-8 print:col-span-1">
             <Section title="Hardware Details">
@@ -376,7 +391,6 @@ const TicketDetail = () => {
               </form>
             </Section>
           </div>
-          {/* The right sidebar is hidden on print, but its children are not */}
           <div className="lg:col-span-1 space-y-8 print:space-y-0">
             <div className="print:hidden">
               {role === "TECHNICIAN" && (

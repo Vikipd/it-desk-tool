@@ -1,21 +1,15 @@
+// COPY AND PASTE THIS ENTIRE BLOCK INTO: frontend/src/pages/UserManagementPage.jsx
+
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Search,
-  ChevronLeft,
-  FileDown,
-  Edit,
-  Trash2,
-  RotateCcw,
-} from "lucide-react";
+import { Search, ChevronLeft, FileDown, Edit, Trash2, RotateCcw } from "lucide-react";
 import { CSVLink } from "react-csv";
 import api from "../api";
 import { toast } from "react-hot-toast";
 import UserModal from "../components/UserModal";
 import ActionMenu from "../components/ActionMenu";
 
-// --- THIS IS THE FIX: A helper function to map backend roles to frontend display names ---
 const roleDisplayMap = {
   CLIENT: "Client",
   TECHNICIAN: "Engineer",
@@ -30,16 +24,18 @@ const UserManagementPage = () => {
   const [editingUser, setEditingUser] = useState(null);
   const queryClient = useQueryClient();
 
+  // --- FIX: Added the '/api/' prefix to the fetchUsers function. ---
+  const fetchUsers = async (tab) => {
+    const isActive = tab === "active";
+    const response = await api.get(`/api/users/?is_active=${isActive}`);
+    return response.data;
+  };
+  // --- END OF FIX ---
+
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users", activeTab],
     queryFn: () => fetchUsers(activeTab),
   });
-
-  const fetchUsers = async (tab) => {
-    const isActive = tab === "active";
-    const response = await api.get(`/users/?is_active=${isActive}`);
-    return response.data;
-  };
 
   const deactivateUserMutation = useMutation({
     mutationFn: (userId) => api.delete(`/api/users/${userId}/`),
@@ -58,6 +54,9 @@ const UserManagementPage = () => {
     },
     onError: () => toast.error("Failed to restore user."),
   });
+  
+  // The rest of your component remains the same.
+  // Just copy the whole block above and paste it.
 
   const handleOpenEditModal = (user) => {
     setEditingUser(user);
@@ -216,7 +215,6 @@ const UserManagementPage = () => {
                     <td className="py-4 px-6 text-gray-600">
                       {user.full_name || `${user.first_name} ${user.last_name}`}
                     </td>
-                    {/* --- FIX: Use the display map to show the correct role name --- */}
                     <td className="py-4 px-6 text-gray-600">
                       {roleDisplayMap[user.role] || user.role}
                     </td>

@@ -1,3 +1,5 @@
+# COPY AND PASTE THIS ENTIRE BLOCK INTO: backend/manage.py
+
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
 import os
@@ -5,7 +7,14 @@ import sys
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'helpdesk.settings.local')
+    # --- MODIFICATION START ---
+    # We read an environment variable to decide which settings to use.
+    # If the variable is not set, it defaults to 'local'.
+    # This ensures 'runserver' always uses your local settings.
+    environment = os.environ.get('DJANGO_ENV', 'local')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', f'helpdesk.settings.{environment}')
+    # --- MODIFICATION END ---
+    
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

@@ -1,3 +1,5 @@
+// COPY AND PASTE THIS ENTIRE BLOCK INTO: frontend/src/pages/Login.jsx
+
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
@@ -14,26 +16,15 @@ function Login() {
   const [loginError, setLoginError] = useState("");
   const navigate = useNavigate();
 
-  // --- MODIFICATION START: Create two separate, stable handlers ---
-  // This is the guaranteed fix. Each input now has its own dedicated
-  // function to update its state and clear any existing error messages.
-  
   const handleUsernameChange = (e) => {
     setUsername(e.target.value);
-    // If there's an error message showing, clear it as the user is typing.
-    if (loginError) {
-      setLoginError("");
-    }
+    if (loginError) { setLoginError(""); }
   };
 
   const handlePasswordChange = (e) => {
     setPassword(e.target.value);
-    // If there's an error message showing, clear it as the user is typing.
-    if (loginError) {
-      setLoginError("");
-    }
+    if (loginError) { setLoginError(""); }
   };
-  // --- MODIFICATION END ---
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -42,8 +33,13 @@ function Login() {
       return;
     }
     setIsLoading(true);
+    setLoginError(""); // Clear previous errors
+
     try {
-      const response = await api.post("/token/", { username, password });
+      // --- FIX: The URL now correctly includes the '/api/' prefix. ---
+      const response = await api.post("/api/token/", { username, password });
+      // --- END OF FIX ---
+
       const { access, refresh } = response.data;
       const decodedToken = jwtDecode(access);
 
@@ -82,6 +78,8 @@ function Login() {
     }
   };
 
+  // The rest of your JSX remains the same, so I'm omitting it for brevity.
+  // Just copy the whole block above and paste it.
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4 font-sans">
       <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col lg:flex-row">
@@ -109,7 +107,6 @@ function Login() {
                 <input
                   type="text"
                   value={username}
-                  // --- MODIFICATION: Use the new dedicated username handler ---
                   onChange={handleUsernameChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
@@ -123,7 +120,6 @@ function Login() {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    // --- MODIFICATION: Use the new dedicated password handler ---
                     onChange={handlePasswordChange}
                     className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required

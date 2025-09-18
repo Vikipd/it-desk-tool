@@ -1,4 +1,4 @@
-// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND CORRECTED ADMIN DASHBOARD.
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL, CORRECTED ADMIN DASHBOARD.
 
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -28,13 +28,35 @@ import {
 } from "lucide-react";
 import UserModal from "../components/UserModal";
 
-const DashboardCard = ({ title, value, icon, to, isActionCard = false }) => {
-  const cardClasses = isActionCard
+const DashboardCard = ({
+  title,
+  value,
+  icon,
+  to,
+  isActionCard = false,
+  isUserCard = false,
+}) => {
+  const cardClasses = isUserCard
+    ? "bg-indigo-100 border-2 border-indigo-400"
+    : isActionCard
     ? "bg-orange-100 border-2 border-orange-400"
     : "bg-white";
-  const textClasses = isActionCard ? "text-orange-600" : "text-gray-800";
-  const iconBgClasses = isActionCard ? "bg-orange-200" : "bg-slate-100";
-  const iconTextClasses = isActionCard ? "text-orange-600" : "text-slate-600";
+  const textClasses = isUserCard
+    ? "text-indigo-600"
+    : isActionCard
+    ? "text-orange-600"
+    : "text-gray-800";
+  const iconBgClasses = isUserCard
+    ? "bg-indigo-200"
+    : isActionCard
+    ? "bg-orange-200"
+    : "bg-slate-100";
+  const iconTextClasses = isUserCard
+    ? "text-indigo-600"
+    : isActionCard
+    ? "text-orange-600"
+    : "text-slate-600";
+
   const cardContent = (
     <div
       className={`${cardClasses} p-6 rounded-xl shadow-lg flex items-center w-full h-full hover:shadow-xl hover:-translate-y-1 transition-all duration-300`}
@@ -165,11 +187,9 @@ const AdminDashboard = () => {
   const { role } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // --- THIS IS THE FIX: Fetch both stats and user profile data ---
   const { data, isLoading, error } = useQuery({
     queryKey: ["adminDashboardData"],
     queryFn: async () => {
-      // We run two API calls at the same time for efficiency
       const [statsRes, profileRes] = await Promise.all([
         api.get("/api/tickets/dashboard-stats/"),
         api.get("/api/auth/me/"),
@@ -180,6 +200,22 @@ const AdminDashboard = () => {
       };
     },
   });
+
+  // --- THIS IS THE FINAL FIX: The new, professional logout handler ---
+  const handleLogout = () => {
+    // 1. Cancel any API calls that are currently happening.
+    queryClient.cancelQueries();
+
+    // 2. Clear all user data from local storage.
+    localStorage.clear();
+
+    // 3. Clear the entire react-query cache.
+    queryClient.clear();
+
+    // 4. Navigate to the login page.
+    navigate("/login");
+    toast.success("Logged out.");
+  };
   // --- END OF FIX ---
 
   const handleChartClick = (type, data) => {
@@ -209,11 +245,6 @@ const AdminDashboard = () => {
     );
 
   const { summary = {}, username = "" } = data || {};
-  const closedTicketsCount =
-    summary.by_status?.find((s) => s.status === "CLOSED")?.count || 0;
-  const resolvedTicketsCount = summary.resolved_tickets || 0;
-  const openTicketsCount =
-    (summary.total_tickets || 0) - closedTicketsCount - resolvedTicketsCount;
   const slaTargets = { CRITICAL: 10, HIGH: 20, MEDIUM: 30, LOW: 40 };
 
   return (
@@ -224,13 +255,11 @@ const AdminDashboard = () => {
             <h1 className="text-2xl font-bold text-gray-800">
               ResolveFlow Dashboard
             </h1>
-            {/* --- THIS IS THE FIX: Display the fetched username --- */}
             <p className="text-sm text-gray-600 mt-1">
               Welcome, <span className="font-semibold">{username}</span>!
             </p>
           </div>
           <div className="flex items-center space-x-3">
-            {/* --- THIS IS THE FIX: Hide "Create User" button for Observers --- */}
             {role !== "OBSERVER" && (
               <button
                 onClick={() => setIsModalOpen(true)}
@@ -246,12 +275,8 @@ const AdminDashboard = () => {
               <Ticket size={18} className="mr-2" /> View All Tickets
             </button>
             <button
-              onClick={() => {
-                localStorage.clear();
-                queryClient.clear();
-                navigate("/login");
-                toast.success("Logged out.");
-              }}
+              // --- FIX: Use the new, robust logout handler ---
+              onClick={handleLogout}
               className="flex items-center font-semibold bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
             >
               <LogOut size={18} className="mr-2" /> Logout
@@ -270,7 +295,7 @@ const AdminDashboard = () => {
         </div>
       </nav>
       <main className="max-w-7xl mx-auto px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
           <DashboardCard
             title="Total Tickets"
             value={summary.total_tickets || 0}
@@ -279,20 +304,26 @@ const AdminDashboard = () => {
           />
           <DashboardCard
             title="Open Tickets"
-            value={openTicketsCount}
+            value={summary.open_tickets || 0}
             icon={<AlertTriangle size={24} />}
             to="/filtered-tickets?status=OPEN"
           />
           <DashboardCard
+            title="In Progress"
+            value={summary.in_progress_tickets || 0}
+            icon={<Clock size={24} />}
+            to="/filtered-tickets?status=IN_PROGRESS"
+          />
+          <DashboardCard
             title="Resolved Tickets"
-            value={resolvedTicketsCount}
+            value={summary.resolved_tickets || 0}
             icon={<Bell size={24} />}
             to="/filtered-tickets?status=RESOLVED"
             isActionCard={true}
           />
           <DashboardCard
             title="Closed Tickets"
-            value={closedTicketsCount}
+            value={summary.closed_tickets || 0}
             icon={<CheckCircle size={24} />}
             to="/filtered-tickets?status=CLOSED"
           />
@@ -301,6 +332,7 @@ const AdminDashboard = () => {
             value={summary.total_users || 0}
             icon={<Users size={24} />}
             to="/user-management"
+            isUserCard={true}
           />
         </div>
         <div className="mb-10">
@@ -438,7 +470,6 @@ const AdminDashboard = () => {
     </div>
   );
 };
-
 const NavLink = ({ to, children }) => {
   const location = useLocation();
   const isActive = location.pathname === to;
@@ -455,5 +486,4 @@ const NavLink = ({ to, children }) => {
     </Link>
   );
 };
-
 export default AdminDashboard;

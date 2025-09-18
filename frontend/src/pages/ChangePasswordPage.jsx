@@ -1,3 +1,5 @@
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL, CORRECTED CHANGE PASSWORD PAGE.
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
@@ -12,13 +14,12 @@ const ChangePasswordPage = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const navigate = useNavigate();
-    const { role } = useAuth(); // Get role for redirection
+    const { role } = useAuth();
 
     const mutation = useMutation({
         mutationFn: (newPasswordData) => api.put('/api/auth/change-password/', newPasswordData),
         onSuccess: () => {
             toast.success('Password changed successfully! Redirecting to your dashboard...');
-            // Redirect based on role after successful change
             const destination = {
                 ADMIN: "/admin-dashboard",
                 OBSERVER: "/admin-dashboard",
@@ -27,9 +28,19 @@ const ChangePasswordPage = () => {
             }[role];
             navigate(destination || "/login");
         },
+        // --- THIS IS THE FIX: Professional, detailed error handling ---
         onError: (error) => {
-            const errorDetail = error.response?.data?.password?.join(' ') || "An error occurred.";
-            toast.error(`Failed to change password: ${errorDetail}`);
+            const errorData = error.response?.data;
+            if (errorData) {
+                // We loop through all the error messages from the backend
+                Object.keys(errorData).forEach((key) => {
+                    const message = Array.isArray(errorData[key]) ? errorData[key].join(" ") : errorData[key];
+                    // Example: "new_password: This password is too common."
+                    toast.error(`${key.replace("_", " ")}: ${message}`);
+                });
+            } else {
+                toast.error("An unexpected error occurred. Please try again.");
+            }
         },
     });
 
@@ -39,7 +50,8 @@ const ChangePasswordPage = () => {
             toast.error('Passwords do not match.');
             return;
         }
-        mutation.mutate({ password });
+        // --- THIS IS THE FIX: We now send the data with the correct field name ---
+        mutation.mutate({ new_password: password });
     };
 
     return (

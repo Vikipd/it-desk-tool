@@ -1,4 +1,4 @@
-// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL CLIENT DASHBOARD.
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND UPGRADED CLIENT DASHBOARD.
 
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useAuth } from "../hooks/useAuth.js";
@@ -64,11 +64,16 @@ const ClientDashboard = () => {
 
   const { tickets = [], username = "" } = data || {};
 
-  // --- THIS IS THE FIX: Added 'resolved' to the stats calculation ---
+  // --- THIS IS THE FIX: Added 'inProgress' to the stats calculation ---
   const stats = useMemo(() => {
-    if (!tickets) return { open: 0, resolved: 0, closed: 0, total: 0 };
-    const openTickets = tickets.filter(
-      (t) => t.status === "OPEN" || t.status === "IN_PROGRESS"
+    if (!tickets)
+      return { open: 0, inProgress: 0, resolved: 0, closed: 0, total: 0 };
+    const openTickets = tickets.filter((t) => t.status === "OPEN").length;
+    const inProgressTickets = tickets.filter(
+      (t) =>
+        t.status === "IN_PROGRESS" ||
+        t.status === "IN_TRANSIT" ||
+        t.status === "UNDER_REPAIR"
     ).length;
     const resolvedTickets = tickets.filter(
       (t) => t.status === "RESOLVED"
@@ -76,6 +81,7 @@ const ClientDashboard = () => {
     const closedTickets = tickets.filter((t) => t.status === "CLOSED").length;
     return {
       open: openTickets,
+      inProgress: inProgressTickets,
       resolved: resolvedTickets,
       closed: closedTickets,
       total: tickets.length,
@@ -174,7 +180,6 @@ const ClientDashboard = () => {
                 ? "Client Tickets Overview"
                 : "Client Dashboard"}
             </h1>
-            {/* --- THIS IS THE FIX: A professional and consistent welcome message --- */}
             <p className="text-sm text-gray-600 mt-1">
               Welcome, <span className="font-semibold">{username}</span>!
             </p>
@@ -212,8 +217,8 @@ const ClientDashboard = () => {
         </div>
       </header>
       <main className="max-w-7xl mx-auto px-6 lg:px-8 py-10">
-        {/* --- THIS IS THE FIX: The layout now uses 4 cards --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        {/* --- THIS IS THE FIX: The layout now uses 5 cards --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
           <SummaryCard
             title="Total Tickets"
             value={stats.total}
@@ -224,9 +229,16 @@ const ClientDashboard = () => {
           <SummaryCard
             title="Open Tickets"
             value={stats.open}
+            icon={<Clock size={24} className="text-blue-600" />}
+            color="bg-blue-100"
+            onClick={() => setSearchTerm("OPEN")}
+          />
+          <SummaryCard
+            title="In Progress"
+            value={stats.inProgress}
             icon={<Clock size={24} className="text-yellow-600" />}
             color="bg-yellow-100"
-            onClick={() => setSearchTerm("OPEN")}
+            onClick={() => setSearchTerm("IN_PROGRESS")}
           />
           <SummaryCard
             title="Resolved Tickets"

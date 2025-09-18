@@ -1,7 +1,7 @@
-// COPY AND PASTE THIS ENTIRE BLOCK INTO: frontend/src/components/UserModal.jsx
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS REMOVES THE FINAL WARNING.
 
 import React, { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query"; // --- FIX: Removed unused 'useQueryClient' ---
 import { X, Eye, EyeOff, KeyRound } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../api";
@@ -16,7 +16,7 @@ const UserModal = ({ user, onClose, onSave }) => {
     phone_number: "",
     role: "CLIENT",
     password: "",
-    confirmPassword: "",
+    password2: "",
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -36,7 +36,7 @@ const UserModal = ({ user, onClose, onSave }) => {
         phone_number: user.phone_number || "",
         role: user.role || "CLIENT",
         password: "",
-        confirmPassword: "",
+        password2: "",
       });
     }
   }, [user, isEditMode]);
@@ -46,7 +46,6 @@ const UserModal = ({ user, onClose, onSave }) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // --- FIX: All API endpoints now correctly start with '/api/'. ---
   const { mutate, isPending: isLoading } = useMutation({
     mutationFn: async (userData) => {
       if (isEditMode) {
@@ -79,7 +78,7 @@ const UserModal = ({ user, onClose, onSave }) => {
           toast.error(`${key.replace("_", " ")}: ${message}`);
         });
       } else {
-        toast.error("An unexpected error occurred.");
+        toast.error("An unexpected error occurred. Please try again.");
       }
     },
   });
@@ -100,12 +99,10 @@ const UserModal = ({ user, onClose, onSave }) => {
       toast.error(errorDetail);
     },
   });
-  // --- END OF FIX ---
-
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
-    if (!isEditMode && formData.password !== formData.confirmPassword) {
+    if (!isEditMode && formData.password !== formData.password2) {
       toast.error("Passwords do not match.");
       return;
     }
@@ -118,9 +115,6 @@ const UserModal = ({ user, onClose, onSave }) => {
     }
     resetPassword({ password: newPassword });
   };
-  
-  // The rest of your component remains the same.
-  // Just copy the whole block above and paste it.
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
@@ -319,8 +313,8 @@ const UserModal = ({ user, onClose, onSave }) => {
                   <div className="relative">
                     <input
                       type={showConfirmPassword ? "text" : "password"}
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
+                      name="password2"
+                      value={formData.password2}
                       onChange={handleChange}
                       required
                       placeholder="Confirm your password"
@@ -364,7 +358,17 @@ const UserModal = ({ user, onClose, onSave }) => {
 };
 
 const InputField = ({
-  label, name, value, onChange, type = "text", required = false, disabled = false, placeholder = "", maxLength, pattern, title,
+  label,
+  name,
+  value,
+  onChange,
+  type = "text",
+  required = false,
+  disabled = false,
+  placeholder = "",
+  maxLength,
+  pattern,
+  title,
 }) => (
   <div>
     <label htmlFor={name} className="block text-sm font-medium text-gray-700">

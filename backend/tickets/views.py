@@ -1,4 +1,4 @@
-# COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FULL AND CORRECTED BACKEND VIEW FILE.
+# COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND CORRECTED BACKEND VIEW FILE.
 
 from rest_framework import viewsets, permissions, filters, generics, status, views
 from rest_framework.decorators import action
@@ -15,6 +15,10 @@ from .serializers import (
 )
 from .filters import TicketFilter
 from accounts.models import User
+
+# ==============================================================================
+# VIEWS FOR CASCADING DROPDOWNS & AUTOFILL (UNCHANGED)
+# ==============================================================================
 
 class ZoneListView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -92,16 +96,30 @@ class FilteredCardDataView(views.APIView):
         values = Card.objects.filter(**active_filters).values_list(field_name, flat=True).distinct().order_by(field_name)
         return Response(values)
 
+# ==============================================================================
+# TICKET AND COMMENT VIEWSETS
+# ==============================================================================
+
 class TicketViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = TicketFilter
     search_fields = [
-        'ticket_id', 'card__node_name', 'card__serial_number', 'card__location', 'card__state', 
-        'card__card_type', 'card__zone', 'status', 'priority', 'assigned_to__username', 'created_by__username'
+        'ticket_id', 
+        'card__node_name', 
+        'card__serial_number', 
+        'card__location', 
+        'card__state', 
+        'card__card_type',
+        'card__zone',
+        'status',
+        'priority',
+        'assigned_to__username',
+        'created_by__username'
     ]
     ordering_fields = ['created_at', 'priority']
     
+    # --- THIS IS THE FINAL, CRITICAL FIX FOR THE BLANK PAGE BUG ---
     def get_queryset(self):
         user = self.request.user
         queryset = Ticket.objects.select_related('created_by', 'assigned_to', 'card').all()
@@ -109,7 +127,10 @@ class TicketViewSet(viewsets.ModelViewSet):
         if user.is_superuser or (hasattr(user, 'role') and user.role in [User.ADMIN, User.OBSERVER]):
             return queryset.order_by('-created_at')
 
+        # This is the correct logic: a user can see any ticket that they either
+        # created (for Clients) OR is assigned to them (for Engineers).
         return queryset.filter(Q(created_by=user) | Q(assigned_to=user)).order_by('-created_at')
+    # --- END OF FIX ---
         
     def get_serializer_class(self):
         if self.action == 'create':
@@ -146,12 +167,17 @@ class TicketViewSet(viewsets.ModelViewSet):
         base_queryset = self.get_queryset()
         response_data = {}
         
-        if user.is_superuser or (hasattr(user, 'role') and user.role == 'OBSERVER'):
+        if user.is_superuser or (hasattr(user, 'role') and user.role in [User.ADMIN, User.OBSERVER]):
             response_data['total_users'] = User.objects.filter(is_active=True).count()
+        
+        open_tickets_count = base_queryset.filter(status='OPEN').count()
+        in_progress_statuses = ['IN_PROGRESS', 'IN_TRANSIT', 'UNDER_REPAIR']
+        in_progress_tickets_count = base_queryset.filter(status__in=in_progress_statuses).count()
+        resolved_tickets_count = base_queryset.filter(status='RESOLVED').count()
+        closed_tickets_count = base_queryset.filter(status='CLOSED').count()
         
         sla_complete_statuses = ['RESOLVED', 'CLOSED']
         resolution_duration_expr = ExpressionWrapper(F('resolved_at') - F('created_at'), output_field=DurationField())
-        
         sla_data = base_queryset.filter(
             status__in=sla_complete_statuses, 
             resolved_at__isnull=False,
@@ -168,7 +194,8 @@ class TicketViewSet(viewsets.ModelViewSet):
         for item in by_priority_counts:
             priority = item['priority']
             by_priority_combined.append({
-                'priority': priority, 'count': item['count'],
+                'priority': priority,
+                'count': item['count'],
                 'avg_resolution_days': sla_dict.get(priority, 0)
             })
         
@@ -176,11 +203,15 @@ class TicketViewSet(viewsets.ModelViewSet):
         by_status = base_queryset.values('status').annotate(count=Count('status'))
         by_category = base_queryset.values('card__card_type').annotate(count=Count('id')).order_by('-count')
         by_category_renamed = [{'card_category': item['card__card_type'], 'count': item['count']} for item in by_category]
-        resolved_tickets_count = base_queryset.filter(status='RESOLVED').count()
         
         response_data.update({
-            'total_tickets': total_tickets, 'resolved_tickets': resolved_tickets_count,
-            'by_status': list(by_status), 'by_priority': by_priority_combined,
+            'total_tickets': total_tickets,
+            'open_tickets': open_tickets_count,
+            'in_progress_tickets': in_progress_tickets_count,
+            'resolved_tickets': resolved_tickets_count,
+            'closed_tickets': closed_tickets_count,
+            'by_status': list(by_status),
+            'by_priority': by_priority_combined,
             'by_category': by_category_renamed,
         })
         return Response(response_data)

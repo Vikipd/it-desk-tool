@@ -1,4 +1,4 @@
-// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL TECHNICIAN DASHBOARD.
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL, CORRECTED TECHNICIAN DASHBOARD.
 
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import React, { useEffect, useState, useMemo } from "react";
@@ -39,14 +39,13 @@ const SummaryCard = ({ title, value, icon, color, onClick }) => (
 const TechnicianDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { role } = useAuth(); // We get the role from the auth hook
+  const { role } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
   const fetchTechnicianData = async () => {
     const params = { search: debouncedSearchTerm || undefined };
-    // --- THIS IS THE FIX: The username now comes from a separate, reliable API call ---
     const [ticketsResponse, profileResponse] = await Promise.all([
       api.get("/api/tickets/", { params }),
       api.get("/api/auth/me/"),
@@ -62,7 +61,6 @@ const TechnicianDashboard = () => {
     queryFn: fetchTechnicianData,
   });
 
-  // We safely get the data, providing default empty values
   const { tickets = [], username = "" } = data || {};
 
   const stats = useMemo(() => {

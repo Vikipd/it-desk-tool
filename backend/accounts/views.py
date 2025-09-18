@@ -1,3 +1,5 @@
+# COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND CORRECTED VIEWS.PY FILE.
+
 from rest_framework import generics, permissions, status, views
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -8,11 +10,14 @@ from .serializers import (
     UserCreateSerializer,
     UserUpdateSerializer,
     AdminPasswordResetSerializer,
+    ForcedChangePasswordSerializer,
     ChangePasswordSerializer
 )
+from .permissions import IsAdminOrReadOnly, IsAdminRole
 
 class ChangePasswordView(generics.UpdateAPIView):
-    serializer_class = ChangePasswordSerializer
+    # --- THIS IS THE FIX: We now use the correct serializer ---
+    serializer_class = ForcedChangePasswordSerializer
     model = User
     permission_classes = (permissions.IsAuthenticated,)
 
@@ -31,7 +36,7 @@ class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
 
 class UserListCreateView(generics.ListCreateAPIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrReadOnly]
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return UserCreateSerializer
@@ -43,25 +48,23 @@ class UserListCreateView(generics.ListCreateAPIView):
 
 class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrReadOnly]
     
-    # --- THIS IS THE GUARANTEED FIX ---
-    # This method was missing. It tells the view to use UserUpdateSerializer for PUT/PATCH
-    # requests, which allows the update to happen.
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
             return UserUpdateSerializer
         return UserSerializer
-    # --- END OF FIX ---
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        if instance == request.user:
+            return Response({"detail": "You cannot deactivate your own account."}, status=status.HTTP_403_FORBIDDEN)
         instance.is_active = False
         instance.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class RestoreUserView(views.APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminRole]
     def post(self, request, pk):
         try:
             user = User.objects.get(pk=pk)
@@ -73,7 +76,7 @@ class RestoreUserView(views.APIView):
 
 class AdminPasswordResetView(generics.UpdateAPIView):
     queryset = User.objects.all()
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminRole]
     serializer_class = AdminPasswordResetSerializer
     def update(self, request, *args, **kwargs):
         user = self.get_object()

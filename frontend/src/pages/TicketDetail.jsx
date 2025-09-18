@@ -1,4 +1,4 @@
-// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FULL AND UNTRUNCATED FILE.
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS REMOVES THE FINAL WARNING.
 
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -10,11 +10,10 @@ import {
   Send,
   Loader2,
   AlertTriangle,
-  Lock,
   Download,
   Edit,
   Printer,
-} from "lucide-react";
+} from "lucide-react"; // --- FIX: Removed unused 'CheckCircle' ---
 import Select from "react-select";
 import { useAuth } from "../hooks/useAuth.js";
 import DatePicker from "react-datepicker";
@@ -73,17 +72,13 @@ const EngineerActions = ({ ticket, onUpdate }) => {
       statusUpdateMutation.mutate(statusUpdateData);
     }
   };
-
-  // --- THIS IS THE FIX: The label has been changed as you requested ---
   const actionOptions = [
     { value: "IN_PROGRESS", label: "Start Progress" },
     { value: "IN_TRANSIT", label: "Mark as In Transit" },
     { value: "UNDER_REPAIR", label: "Mark as Under Repair" },
     { value: "RESOLVED", label: "Mark as Resolved" },
-    { value: "ON_HOLD", label: "Other Actions" }, // Changed from "On Hold (Other)"
+    { value: "ON_HOLD", label: "Other Actions" },
   ];
-  // --- END OF FIX ---
-
   const statusOrder = [
     "OPEN",
     "IN_PROGRESS",
@@ -199,7 +194,7 @@ const TicketDetail = () => {
       toast.success("Comment added!");
     },
     onError: (error) => {
-      console.error("Detailed Error Response:", error.response.data);
+      console.error("Detailed Error Response:", error.response?.data);
       toast.error("Failed to add comment. See console for details.");
     },
   });
@@ -263,11 +258,14 @@ const TicketDetail = () => {
     return (
       <div className="text-center p-8 text-red-600">
         <AlertTriangle size={48} />
-        <p className="mt-4">Failed to load ticket details.</p>
+        <p className="mt-4">
+          Failed to load ticket details. You may not have permission to view
+          this ticket.
+        </p>
       </div>
     );
 
-  const cardDetails = ticket.card || {};
+  const cardDetails = ticket?.card || {};
   const timestampFields = [
     "assigned_at",
     "in_progress_at",
@@ -278,7 +276,7 @@ const TicketDetail = () => {
     "closed_at",
   ];
 
-  const isCommentBoxDisabled = commentMutation.isPending || role === "OBSERVER";
+  const isCommentBoxDisabled = commentMutation.isPending;
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-sans print:bg-white">
@@ -363,11 +361,7 @@ const TicketDetail = () => {
                   type="text"
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  placeholder={
-                    role === "OBSERVER"
-                      ? "Commenting is disabled for Observers"
-                      : "Add a comment..."
-                  }
+                  placeholder="Add a comment..."
                   className="flex-grow border rounded-md p-2"
                   disabled={isCommentBoxDisabled}
                 />
@@ -379,8 +373,6 @@ const TicketDetail = () => {
                 >
                   {commentMutation.isPending ? (
                     <Loader2 className="animate-spin" />
-                  ) : isCommentBoxDisabled ? (
-                    <Lock />
                   ) : (
                     <Send />
                   )}

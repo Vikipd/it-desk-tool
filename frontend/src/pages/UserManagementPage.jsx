@@ -1,14 +1,23 @@
-// COPY AND PASTE THIS ENTIRE BLOCK INTO: frontend/src/pages/UserManagementPage.jsx
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND CORRECTED USER MANAGEMENT PAGE.
 
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, ChevronLeft, FileDown, Edit, Trash2, RotateCcw } from "lucide-react";
+import {
+  Search,
+  ChevronLeft,
+  FileDown,
+  Edit,
+  Trash2,
+  RotateCcw,
+} from "lucide-react";
 import { CSVLink } from "react-csv";
 import api from "../api";
 import { toast } from "react-hot-toast";
 import UserModal from "../components/UserModal";
 import ActionMenu from "../components/ActionMenu";
+// --- THIS IS THE FIX: We need the useAuth hook to check the user's role ---
+import { useAuth } from "../hooks/useAuth";
 
 const roleDisplayMap = {
   CLIENT: "Client",
@@ -18,19 +27,19 @@ const roleDisplayMap = {
 };
 
 const UserManagementPage = () => {
+  // --- FIX: Get the current user's role ---
+  const { role } = useAuth();
   const [activeTab, setActiveTab] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const queryClient = useQueryClient();
 
-  // --- FIX: Added the '/api/' prefix to the fetchUsers function. ---
   const fetchUsers = async (tab) => {
     const isActive = tab === "active";
     const response = await api.get(`/api/users/?is_active=${isActive}`);
     return response.data;
   };
-  // --- END OF FIX ---
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users", activeTab],
@@ -54,11 +63,10 @@ const UserManagementPage = () => {
     },
     onError: () => toast.error("Failed to restore user."),
   });
-  
-  // The rest of your component remains the same.
-  // Just copy the whole block above and paste it.
 
   const handleOpenEditModal = (user) => {
+    // --- FIX: Observers cannot open the edit modal ---
+    if (role === "OBSERVER") return;
     setEditingUser(user);
     setIsModalOpen(true);
   };
@@ -194,15 +202,21 @@ const UserManagementPage = () => {
                 <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                   Phone
                 </th>
-                <th className="py-3 px-6 text-center text-xs font-semibold text-gray-500 uppercase">
-                  Actions
-                </th>
+                {/* --- FIX: The Actions column is now hidden for Observers --- */}
+                {role !== "OBSERVER" && (
+                  <th className="py-3 px-6 text-center text-xs font-semibold text-gray-500 uppercase">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan="5" className="text-center py-10">
+                  <td
+                    colSpan={role !== "OBSERVER" ? 5 : 4}
+                    className="text-center py-10"
+                  >
                     Loading...
                   </td>
                 </tr>
@@ -221,9 +235,12 @@ const UserManagementPage = () => {
                     <td className="py-4 px-6 text-gray-600">
                       {user.phone_number || "--"}
                     </td>
-                    <td className="py-4 px-6 text-center">
-                      <ActionMenu actions={getActionsForUser(user)} />
-                    </td>
+                    {/* --- FIX: The Actions menu is now hidden for Observers --- */}
+                    {role !== "OBSERVER" && (
+                      <td className="py-4 px-6 text-center">
+                        <ActionMenu actions={getActionsForUser(user)} />
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

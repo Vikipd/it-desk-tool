@@ -1,6 +1,8 @@
-import { useQueryClient } from "@tanstack/react-query";
-import React, { useEffect, useState, useCallback } from "react";
-import { useNavigate, Link } from "react-router-dom";
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL TECHNICIAN DASHBOARD.
+
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import React, { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import {
   Loader2,
@@ -10,72 +12,88 @@ import {
   Ticket,
   Clock,
   ArrowLeft,
+  Search,
+  FileDown,
+  CheckCircle,
 } from "lucide-react";
 import api from "../api.js";
 import { useAuth } from "../hooks/useAuth.js";
 
-const SummaryCard = ({ title, value, icon, color, to }) => {
-  const content = (
-    <div className="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-      <div className="flex items-center">
-        <div className={`mr-5 p-3 rounded-full ${color}`}>{icon}</div>
-        <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="text-3xl font-bold text-gray-800 tracking-tight">
-            {value}
-          </p>
-        </div>
+const SummaryCard = ({ title, value, icon, color, onClick }) => (
+  <div
+    onClick={onClick}
+    className="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+  >
+    <div className="flex items-center">
+      <div className={`mr-5 p-3 rounded-full ${color}`}>{icon}</div>
+      <div>
+        <p className="text-sm font-medium text-gray-500">{title}</p>
+        <p className="text-3xl font-bold text-gray-800 tracking-tight">
+          {value}
+        </p>
       </div>
     </div>
-  );
-  if (to) return <Link to={to}>{content}</Link>;
-  return content;
-};
+  </div>
+);
 
 const TechnicianDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { role } = useAuth();
-  const [tickets, setTickets] = useState([]);
-  const [username, setUsername] = useState("");
-  const [stats, setStats] = useState({ inProgress: 0, total: 0 });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { role } = useAuth(); // We get the role from the auth hook
 
-  const fetchTechnicianData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [ticketsResponse, profileResponse] = await Promise.all([
-        api.get("/api/tickets/"),
-        api.get("/api/auth/me/"),
-      ]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
-      const assignedTickets =
-        ticketsResponse.data.results || ticketsResponse.data;
-      setTickets(assignedTickets);
-      setUsername(profileResponse.data.username);
+  const fetchTechnicianData = async () => {
+    const params = { search: debouncedSearchTerm || undefined };
+    // --- THIS IS THE FIX: The username now comes from a separate, reliable API call ---
+    const [ticketsResponse, profileResponse] = await Promise.all([
+      api.get("/api/tickets/", { params }),
+      api.get("/api/auth/me/"),
+    ]);
+    return {
+      tickets: ticketsResponse.data.results || ticketsResponse.data,
+      username: profileResponse.data.username,
+    };
+  };
 
-      const inProgressTickets = assignedTickets.filter(
-        (t) =>
-          t.status === "IN_PROGRESS" ||
-          t.status === "IN_TRANSIT" ||
-          t.status === "UNDER_REPAIR"
-      ).length;
-      setStats({
-        inProgress: inProgressTickets,
-        total: assignedTickets.length,
-      });
-    } catch (err) {
-      setError("Failed to load tickets. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const { data, error, isLoading } = useQuery({
+    queryKey: ["technicianDashboard", debouncedSearchTerm],
+    queryFn: fetchTechnicianData,
+  });
+
+  // We safely get the data, providing default empty values
+  const { tickets = [], username = "" } = data || {};
+
+  const stats = useMemo(() => {
+    if (!tickets)
+      return { open: 0, inProgress: 0, resolved: 0, closed: 0, total: 0 };
+    const openTickets = tickets.filter((t) => t.status === "OPEN").length;
+    const inProgressTickets = tickets.filter(
+      (t) =>
+        t.status === "IN_PROGRESS" ||
+        t.status === "IN_TRANSIT" ||
+        t.status === "UNDER_REPAIR"
+    ).length;
+    const resolvedTickets = tickets.filter(
+      (t) => t.status === "RESOLVED"
+    ).length;
+    const closedTickets = tickets.filter((t) => t.status === "CLOSED").length;
+    return {
+      open: openTickets,
+      inProgress: inProgressTickets,
+      resolved: resolvedTickets,
+      closed: closedTickets,
+      total: tickets.length,
+    };
+  }, [tickets]);
 
   useEffect(() => {
-    fetchTechnicianData();
-  }, [fetchTechnicianData]);
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const handleLogout = () => {
     localStorage.clear();
@@ -101,19 +119,50 @@ const TechnicianDashboard = () => {
     }
   };
 
-  if (isLoading)
-    return (
-      <div className="flex justify-center items-center h-screen bg-slate-50">
-        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-      </div>
+  const handleExport = () => {
+    if (!tickets || tickets.length === 0) {
+      toast.error("You have no tickets to export.");
+      return;
+    }
+    toast.success("Generating your CSV export...");
+    const headers = [
+      "Ticket ID",
+      "Node Name",
+      "Category",
+      "Status",
+      "Priority",
+      "Created At",
+    ];
+    const rows = tickets.map((ticket) =>
+      [
+        `"${ticket.ticket_id}"`,
+        `"${ticket.card?.node_name || "N/A"}"`,
+        `"${
+          ticket.card?.card_type || ticket.other_card_type_description || "N/A"
+        }"`,
+        `"${ticket.status}"`,
+        `"${ticket.priority}"`,
+        `"${new Date(ticket.created_at).toLocaleString()}"`,
+      ].join(",")
     );
+    const csvContent = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "my_assigned_tickets.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (error)
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-slate-50 text-red-600">
         <AlertTriangle className="h-12 w-12 mb-4" />
-        <p className="text-xl font-semibold">{error}</p>
+        <p className="text-xl font-semibold">{error.message}</p>
         <button
-          onClick={fetchTechnicianData}
+          onClick={() => queryClient.invalidateQueries(["technicianDashboard"])}
           className="mt-6 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition"
         >
           Try Again
@@ -145,6 +194,12 @@ const TechnicianDashboard = () => {
               </button>
             )}
             <button
+              onClick={handleExport}
+              className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-sm"
+            >
+              <FileDown size={18} className="mr-2" /> Export
+            </button>
+            <button
               onClick={handleLogout}
               className="flex items-center font-semibold bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 shadow-sm"
             >
@@ -155,32 +210,70 @@ const TechnicianDashboard = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
           <SummaryCard
-            title="Total Assigned Tickets"
+            title="Total Assigned"
             value={stats.total}
             icon={<Ticket size={24} className="text-blue-600" />}
             color="bg-blue-100"
-            to="/filtered-tickets"
+            onClick={() => setSearchTerm("")}
           />
           <SummaryCard
-            title="Tickets In Progress"
+            title="Open"
+            value={stats.open}
+            icon={<Ticket size={24} className="text-blue-600" />}
+            color="bg-blue-100"
+            onClick={() => setSearchTerm("OPEN")}
+          />
+          <SummaryCard
+            title="In Progress"
             value={stats.inProgress}
             icon={<Clock size={24} className="text-yellow-600" />}
             color="bg-yellow-100"
-            to="/filtered-tickets?status=IN_PROGRESS"
+            onClick={() => setSearchTerm("IN_PROGRESS")}
+          />
+          <SummaryCard
+            title="Resolved"
+            value={stats.resolved}
+            icon={<CheckCircle size={24} className="text-purple-600" />}
+            color="bg-purple-100"
+            onClick={() => setSearchTerm("RESOLVED")}
+          />
+          <SummaryCard
+            title="Closed"
+            value={stats.closed}
+            icon={<CheckCircle size={24} className="text-green-600" />}
+            color="bg-green-100"
+            onClick={() => setSearchTerm("CLOSED")}
           />
         </div>
 
         <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200/80">
-          <div className="p-6">
+          <div className="p-6 flex justify-between items-center">
             <h2 className="text-2xl font-bold text-gray-800 tracking-tight">
               {role === "OBSERVER"
                 ? "All Assigned Tickets"
                 : "My Assigned Tickets"}
             </h2>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search your tickets..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg"
+              />
+              <Search
+                size={20}
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              />
+            </div>
           </div>
-          {tickets.length > 0 ? (
+          {isLoading ? (
+            <div className="text-center py-20 px-6">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
+            </div>
+          ) : tickets.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full w-full">
                 <thead className="bg-slate-50 border-b border-gray-200">

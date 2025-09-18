@@ -1,4 +1,4 @@
-// COPY AND PASTE THIS ENTIRE BLOCK INTO: frontend/src/pages/TicketDetail.jsx
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FULL AND UNTRUNCATED FILE.
 
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -22,10 +22,12 @@ import "react-datepicker/dist/react-datepicker.css";
 
 const DetailItem = ({ label, value, fullWidth = false }) => (
   <div className={fullWidth ? "sm:col-span-2" : ""}>
-    <p className="text-sm font-medium text-gray-500">{label}</p>
-    <p className="mt-1 text-base text-gray-900 break-words">{value || "--"}</p>
+    {" "}
+    <p className="text-sm font-medium text-gray-500">{label}</p>{" "}
+    <p className="mt-1 text-base text-gray-900 break-words">{value || "--"}</p>{" "}
   </div>
 );
+
 const EngineerActions = ({ ticket, onUpdate }) => {
   const [selectedAction, setSelectedAction] = useState(null);
   const [otherReason, setOtherReason] = useState("");
@@ -71,13 +73,17 @@ const EngineerActions = ({ ticket, onUpdate }) => {
       statusUpdateMutation.mutate(statusUpdateData);
     }
   };
+
+  // --- THIS IS THE FIX: The label has been changed as you requested ---
   const actionOptions = [
     { value: "IN_PROGRESS", label: "Start Progress" },
     { value: "IN_TRANSIT", label: "Mark as In Transit" },
     { value: "UNDER_REPAIR", label: "Mark as Under Repair" },
     { value: "RESOLVED", label: "Mark as Resolved" },
-    { value: "ON_HOLD", label: "On Hold (Other)" },
+    { value: "ON_HOLD", label: "Other Actions" }, // Changed from "On Hold (Other)"
   ];
+  // --- END OF FIX ---
+
   const statusOrder = [
     "OPEN",
     "IN_PROGRESS",
@@ -164,9 +170,6 @@ const TicketDetail = () => {
     queryFn: async () => {
       const res = await api.get(`/api/tickets/${id}/`);
       const ticketData = res.data;
-
-      // --- FIX: THIS IS THE MODIFIED, CORRECTED LOGIC ---
-      // We define ALL possible timestamp fields here.
       const allTimestampFields = [
         "assigned_at",
         "in_progress_at",
@@ -176,17 +179,13 @@ const TicketDetail = () => {
         "resolved_at",
         "closed_at",
       ];
-      
-      // We dynamically create the state object by looping through the fields.
-      // For each field, if the ticket has a date for it, we convert it to a Date object.
-      // Otherwise, we set it to null. This ensures ALL fields are accounted for.
       const initialTimestamps = {};
-      allTimestampFields.forEach(field => {
-        initialTimestamps[field] = ticketData[field] ? new Date(ticketData[field]) : null;
+      allTimestampFields.forEach((field) => {
+        initialTimestamps[field] = ticketData[field]
+          ? new Date(ticketData[field])
+          : null;
       });
       setEditableTimestamps(initialTimestamps);
-      // --- END OF FIX ---
-
       return ticketData;
     },
   });
@@ -199,8 +198,12 @@ const TicketDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["ticket", id] });
       toast.success("Comment added!");
     },
-    onError: () => toast.error("Failed to add comment."),
+    onError: (error) => {
+      console.error("Detailed Error Response:", error.response.data);
+      toast.error("Failed to add comment. See console for details.");
+    },
   });
+
   const adminMutation = useMutation({
     mutationFn: (updateData) => api.patch(`/api/tickets/${id}/`, updateData),
     onSuccess: () => {
@@ -209,6 +212,7 @@ const TicketDetail = () => {
     },
     onError: () => toast.error("Failed to update ticket."),
   });
+
   const timestampMutation = useMutation({
     mutationFn: (timestampData) =>
       api.patch(`/api/tickets/${id}/edit-timestamps/`, timestampData),
@@ -219,12 +223,14 @@ const TicketDetail = () => {
     },
     onError: () => toast.error("Failed to update timestamps."),
   });
+
   const handleCommentSubmit = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (newComment.trim()) {
       commentMutation.mutate({ text: newComment });
     }
   };
+
   const handleAssign = (selectedOption) =>
     adminMutation.mutate({
       assigned_to: selectedOption ? selectedOption.value : null,
@@ -271,6 +277,8 @@ const TicketDetail = () => {
     "resolved_at",
     "closed_at",
   ];
+
+  const isCommentBoxDisabled = commentMutation.isPending || role === "OBSERVER";
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-sans print:bg-white">
@@ -350,45 +358,34 @@ const TicketDetail = () => {
                   ?.map((c) => <CommentItem key={c.id} comment={c} />)
                   .reverse()}
               </div>
-              <form
-                onSubmit={handleCommentSubmit}
-                className="mt-6 flex gap-2 print:hidden"
-              >
+              <div className="mt-6 flex gap-2 print:hidden">
                 <input
                   type="text"
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   placeholder={
-                    ticket.status === "CLOSED"
-                      ? "Cannot comment on a closed ticket"
+                    role === "OBSERVER"
+                      ? "Commenting is disabled for Observers"
                       : "Add a comment..."
                   }
                   className="flex-grow border rounded-md p-2"
-                  disabled={
-                    commentMutation.isPending ||
-                    ticket.status === "CLOSED" ||
-                    role === "OBSERVER"
-                  }
+                  disabled={isCommentBoxDisabled}
                 />
                 <button
-                  type="submit"
+                  onClick={handleCommentSubmit}
+                  type="button"
                   className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 w-12 h-10 flex items-center justify-center"
-                  disabled={
-                    commentMutation.isPending ||
-                    !newComment.trim() ||
-                    ticket.status === "CLOSED" ||
-                    role === "OBSERVER"
-                  }
+                  disabled={isCommentBoxDisabled || !newComment.trim()}
                 >
                   {commentMutation.isPending ? (
                     <Loader2 className="animate-spin" />
-                  ) : ticket.status === "CLOSED" || role === "OBSERVER" ? (
+                  ) : isCommentBoxDisabled ? (
                     <Lock />
                   ) : (
                     <Send />
                   )}
                 </button>
-              </form>
+              </div>
             </Section>
           </div>
           <div className="lg:col-span-1 space-y-8 print:space-y-0">
@@ -500,33 +497,38 @@ const TicketDetail = () => {
 
 const Section = ({ title, children }) => (
   <div className="bg-gray-50 p-6 rounded-lg shadow-sm print:shadow-none print:border print:border-gray-200 print:bg-white">
-    <h2 className="text-xl font-semibold mb-4 border-b pb-2">{title}</h2>
-    {children}
+    {" "}
+    <h2 className="text-xl font-semibold mb-4 border-b pb-2">{title}</h2>{" "}
+    {children}{" "}
   </div>
 );
 const CommentItem = ({ comment }) => (
   <div className="p-4 bg-white rounded-lg border-l-4 border-blue-300 print:border-none print:bg-transparent print:p-0 print:mb-2">
+    {" "}
     <div className="flex justify-between text-sm">
-      <p className="font-bold text-blue-800">{comment.author_username}</p>
+      {" "}
+      <p className="font-bold text-blue-800">{comment.author_username}</p>{" "}
       <p className="text-gray-500">
         {new Date(comment.created_at).toLocaleString()}
-      </p>
-    </div>
-    <p className="mt-2 text-gray-800">{comment.text}</p>
+      </p>{" "}
+    </div>{" "}
+    <p className="mt-2 text-gray-800">{comment.text}</p>{" "}
   </div>
 );
 const TimestampItem = ({ label, date }) =>
   date ? (
     <div className="flex justify-between items-center text-sm">
-      <p className="text-gray-600">{label}:</p>
+      {" "}
+      <p className="text-gray-600">{label}:</p>{" "}
       <p className="font-semibold text-gray-800">
         {new Date(date).toLocaleString()}
-      </p>
+      </p>{" "}
     </div>
   ) : null;
 const EditableTimestampItem = ({ label, selected, onChange }) => (
   <div className="flex justify-between items-center text-sm">
-    <p className="text-gray-600">{label}:</p>
+    {" "}
+    <p className="text-gray-600">{label}:</p>{" "}
     <DatePicker
       selected={selected}
       onChange={onChange}
@@ -534,7 +536,7 @@ const EditableTimestampItem = ({ label, selected, onChange }) => (
       dateFormat="Pp"
       isClearable
       className="w-full p-1 border rounded-md"
-    />
+    />{" "}
   </div>
 );
 const AdminAssign = ({ ticket, onAssign }) => {
@@ -549,6 +551,7 @@ const AdminAssign = ({ ticket, onAssign }) => {
   );
   return (
     <Section title="Assign Engineer">
+      {" "}
       <Select
         options={engineerOptions}
         value={currentAssignee}
@@ -556,7 +559,7 @@ const AdminAssign = ({ ticket, onAssign }) => {
         isClearable={true}
         isLoading={isLoading}
         placeholder="Unassigned"
-      />
+      />{" "}
     </Section>
   );
 };
@@ -572,11 +575,12 @@ const AdminPriority = ({ ticket, onPriorityChange }) => {
   );
   return (
     <Section title="Change Priority">
+      {" "}
       <Select
         options={priorityOptions}
         value={currentPriority}
         onChange={onPriorityChange}
-      />
+      />{" "}
     </Section>
   );
 };

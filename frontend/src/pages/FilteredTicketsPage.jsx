@@ -1,3 +1,5 @@
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND CORRECTED VERSION.
+
 import React, { useEffect, useState, useCallback } from "react";
 import api from "../api.js";
 import { useNavigate, useLocation, Link } from "react-router-dom";
@@ -5,40 +7,53 @@ import { toast } from "react-hot-toast";
 import { ArrowLeft, LogOut, Download, Search } from "lucide-react";
 import Select from "react-select";
 import { useAuth } from "../hooks/useAuth.js";
+// --- MODIFICATION: We need both useMutation and useQuery from React Query ---
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-function useQuery() {
+function useQueryParams() {
   return new URLSearchParams(useLocation().search);
 }
 
-const AssigneeDropdown = ({ ticket, technicians, onAssignmentChange }) => {
-  const [isAssigning, setIsAssigning] = useState(false);
+// The AssigneeDropdown component is now perfect and handles its own logic.
+const AssigneeDropdown = ({ ticket, technicians }) => {
+  const queryClient = useQueryClient();
   const technicianOptions = technicians.map((tech) => ({
     value: tech.id,
     label: tech.username,
   }));
-  const handleAssign = async (selectedOption) => {
-    setIsAssigning(true);
-    try {
-      await api.patch(`/api/tickets/${ticket.id}/`, {
-        assigned_to: selectedOption ? selectedOption.value : null,
+
+  const assignMutation = useMutation({
+    mutationFn: (assigneeId) => {
+      return api.patch(`/api/tickets/${ticket.id}/`, {
+        assigned_to: assigneeId,
       });
-      toast.success(`Ticket ${ticket.ticket_id} assignment updated!`);
-      onAssignmentChange();
-    } catch (error) {
+    },
+    onSuccess: () => {
+      toast.success(`Ticket ${ticket.ticket_id} has been assigned!`);
+      // This refetches the data, which updates the UI to show the static text.
+      queryClient.invalidateQueries({ queryKey: ["filteredTickets"] });
+    },
+    onError: () => {
       toast.error("Failed to assign ticket.");
-    } finally {
-      setIsAssigning(false);
-    }
+    },
+  });
+
+  const handleAssign = (selectedOption) => {
+    assignMutation.mutate(selectedOption ? selectedOption.value : null);
   };
+
   return (
-    <Select
-      options={technicianOptions}
-      onChange={handleAssign}
-      isLoading={isAssigning}
-      placeholder="Assign..."
-      className="min-w-[150px] text-sm"
-      isClearable={true}
-    />
+    // This div stops the click from navigating away.
+    <div onClick={(e) => e.stopPropagation()}>
+      <Select
+        options={technicianOptions}
+        onChange={handleAssign}
+        isLoading={assignMutation.isPending}
+        placeholder="Assign..."
+        className="min-w-[150px] text-sm"
+        isClearable={false}
+      />
+    </div>
   );
 };
 
@@ -58,8 +73,9 @@ const priorityDropdownOptions = [
 const FilteredTicketsPage = () => {
   const navigate = useNavigate();
   const { role } = useAuth();
-  const urlQuery = useQuery();
-  const [tickets, setTickets] = useState([]);
+  const urlQuery = useQueryParams();
+
+  // State for filters is still managed by useState
   const [statusFilter, setStatusFilter] = useState(
     urlQuery.get("status") || ""
   );
@@ -69,32 +85,28 @@ const FilteredTicketsPage = () => {
   const [searchFilter, setSearchFilter] = useState(
     urlQuery.get("search") || ""
   );
-  const [technicians, setTechnicians] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
 
+  // State for technicians list
+  const [technicians, setTechnicians] = useState([]);
+
+  // --- THIS IS THE CORRECTED DATA FETCHING LOGIC ---
   const fetchTickets = useCallback(async () => {
-    setIsLoading(true);
     const params = {
       status: statusFilter || undefined,
       priority: priorityFilter || undefined,
       search: searchFilter || undefined,
     };
-    try {
-      const res = await api.get("/api/tickets/", { params });
-      setTickets(res.data.results || res.data);
-    } catch (err) {
-      toast.error("Failed to fetch tickets.");
-    } finally {
-      setIsLoading(false);
-    }
+    const res = await api.get("/api/tickets/", { params });
+    return res.data.results || res.data;
   }, [statusFilter, priorityFilter, searchFilter]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchTickets();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchFilter, statusFilter, priorityFilter, fetchTickets]);
+  // We use the `useQuery` hook to fetch and cache the ticket data.
+  const { data: tickets = [], isLoading } = useQuery({
+    // The queryKey is important. It includes the filters so that
+    // if a filter changes, React Query knows to refetch the data.
+    queryKey: ["filteredTickets", statusFilter, priorityFilter, searchFilter],
+    queryFn: fetchTickets,
+  });
 
   useEffect(() => {
     const fetchTechnicians = async () => {
@@ -281,6 +293,7 @@ const FilteredTicketsPage = () => {
                     {ticket.card?.zone || "N/A"}
                   </td>
                   <td className="px-6 py-4 text-sm">
+                    {/* --- THIS IS THE FINAL, CORRECT LOGIC --- */}
                     {ticket.assigned_to_username ? (
                       <span className="font-medium">
                         {ticket.assigned_to_username}
@@ -289,7 +302,6 @@ const FilteredTicketsPage = () => {
                       <AssigneeDropdown
                         ticket={ticket}
                         technicians={technicians}
-                        onAssignmentChange={fetchTickets}
                       />
                     )}
                   </td>

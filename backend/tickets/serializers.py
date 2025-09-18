@@ -1,3 +1,5 @@
+# COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND CORRECTED VERSION.
+
 from rest_framework import serializers
 from django.utils import timezone
 from .models import Ticket, Comment, Card
@@ -15,13 +17,14 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = ['id', 'ticket', 'author', 'author_username', 'text', 'created_at']
-        read_only_fields = ['author']
+        # --- THIS IS THE FINAL FIX ---
+        # We tell the serializer that 'author' and 'ticket' will be provided by the view,
+        # not by the user. This solves the validation error.
+        read_only_fields = ['author', 'ticket']
+        # --- END OF FIX ---
 
 class TicketCreateSerializer(serializers.ModelSerializer):
-    # This field is for the normal workflow
     serial_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
-
-    # These fields are for the "Other" card type manual workflow
     zone = serializers.CharField(write_only=True, required=False, allow_blank=True)
     state = serializers.CharField(write_only=True, required=False, allow_blank=True)
     node_type = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -47,14 +50,12 @@ class TicketCreateSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         card_instance = None
         
-        # LOGIC 1: Normal workflow
         if validated_data.get('serial_number'):
             try:
                 card_instance = Card.objects.get(serial_number=validated_data['serial_number'])
             except Card.DoesNotExist:
                 raise serializers.ValidationError({"serial_number": "A card with this serial number does not exist."})
         
-        # LOGIC 2: "Other" workflow
         elif validated_data.get('other_card_type_description'):
             temp_serial = validated_data.get('manual_serial_number') or f"OTHER-{user.id}-{timezone.now().timestamp()}"
             

@@ -1,9 +1,11 @@
+# COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FULL AND CORRECTED BACKEND VIEW FILE.
+
 from rest_framework import viewsets, permissions, filters, generics, status, views
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Avg, F, ExpressionWrapper, DurationField
+from django.db.models import Count, Avg, F, ExpressionWrapper, DurationField, Q
 from .models import Ticket, Comment, Card
 from .serializers import (
     TicketDetailSerializer, 
@@ -13,10 +15,6 @@ from .serializers import (
 )
 from .filters import TicketFilter
 from accounts.models import User
-
-# ==============================================================================
-# VIEWS FOR CASCADING DROPDOWNS & AUTOFILL
-# ==============================================================================
 
 class ZoneListView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -94,37 +92,24 @@ class FilteredCardDataView(views.APIView):
         values = Card.objects.filter(**active_filters).values_list(field_name, flat=True).distinct().order_by(field_name)
         return Response(values)
 
-# ==============================================================================
-# TICKET AND COMMENT VIEWSETS
-# ==============================================================================
-
 class TicketViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = TicketFilter
     search_fields = [
-        'ticket_id', 
-        'card__node_name', 
-        'card__serial_number', 
-        'card__location', 
-        'card__state', 
-        'card__card_type',
-        'card__zone',
-        'status',
-        'priority',
-        'assigned_to__username',
-        'created_by__username'
+        'ticket_id', 'card__node_name', 'card__serial_number', 'card__location', 'card__state', 
+        'card__card_type', 'card__zone', 'status', 'priority', 'assigned_to__username', 'created_by__username'
     ]
     ordering_fields = ['created_at', 'priority']
     
     def get_queryset(self):
         user = self.request.user
         queryset = Ticket.objects.select_related('created_by', 'assigned_to', 'card').all()
-        if user.is_superuser or (hasattr(user, 'role') and user.role == 'OBSERVER'):
+
+        if user.is_superuser or (hasattr(user, 'role') and user.role in [User.ADMIN, User.OBSERVER]):
             return queryset.order_by('-created_at')
-        if hasattr(user, 'role') and user.role == 'TECHNICIAN':
-            return queryset.filter(assigned_to=user).order_by('-created_at')
-        return queryset.filter(created_by=user).order_by('-created_at')
+
+        return queryset.filter(Q(created_by=user) | Q(assigned_to=user)).order_by('-created_at')
         
     def get_serializer_class(self):
         if self.action == 'create':
@@ -158,17 +143,16 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='dashboard-stats')
     def dashboard_stats(self, request):
         user = self.request.user
+        base_queryset = self.get_queryset()
         response_data = {}
+        
         if user.is_superuser or (hasattr(user, 'role') and user.role == 'OBSERVER'):
-            tickets_queryset = Ticket.objects.all()
             response_data['total_users'] = User.objects.filter(is_active=True).count()
-        else:
-            tickets_queryset = self.get_queryset()
         
         sla_complete_statuses = ['RESOLVED', 'CLOSED']
         resolution_duration_expr = ExpressionWrapper(F('resolved_at') - F('created_at'), output_field=DurationField())
         
-        sla_data = Ticket.objects.filter(
+        sla_data = base_queryset.filter(
             status__in=sla_complete_statuses, 
             resolved_at__isnull=False,
             created_at__isnull=False
@@ -179,27 +163,24 @@ class TicketViewSet(viewsets.ModelViewSet):
             for item in sla_data
         }
         
-        by_priority_counts = tickets_queryset.values('priority').annotate(count=Count('priority'))
+        by_priority_counts = base_queryset.values('priority').annotate(count=Count('priority'))
         by_priority_combined = []
         for item in by_priority_counts:
             priority = item['priority']
             by_priority_combined.append({
-                'priority': priority,
-                'count': item['count'],
+                'priority': priority, 'count': item['count'],
                 'avg_resolution_days': sla_dict.get(priority, 0)
             })
         
-        total_tickets = tickets_queryset.count()
-        by_status = tickets_queryset.values('status').annotate(count=Count('status'))
-        by_category = tickets_queryset.values('card__card_type').annotate(count=Count('id')).order_by('-count')
+        total_tickets = base_queryset.count()
+        by_status = base_queryset.values('status').annotate(count=Count('status'))
+        by_category = base_queryset.values('card__card_type').annotate(count=Count('id')).order_by('-count')
         by_category_renamed = [{'card_category': item['card__card_type'], 'count': item['count']} for item in by_category]
-        resolved_tickets_count = tickets_queryset.filter(status='RESOLVED').count()
+        resolved_tickets_count = base_queryset.filter(status='RESOLVED').count()
         
         response_data.update({
-            'total_tickets': total_tickets,
-            'resolved_tickets': resolved_tickets_count,
-            'by_status': list(by_status),
-            'by_priority': by_priority_combined,
+            'total_tickets': total_tickets, 'resolved_tickets': resolved_tickets_count,
+            'by_status': list(by_status), 'by_priority': by_priority_combined,
             'by_category': by_category_renamed,
         })
         return Response(response_data)
@@ -211,6 +192,9 @@ class CommentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Comment.objects.filter(ticket_id=self.kwargs.get('ticket_pk'))
     def perform_create(self, serializer):
-        ticket = Ticket.objects.get(pk=self.kwargs.get('ticket_pk'))
-        serializer.save(author=self.request.user, ticket=ticket)
-        
+        ticket_id = self.kwargs.get('ticket_pk')
+        try:
+            ticket = Ticket.objects.get(pk=ticket_id)
+            serializer.save(author=self.request.user, ticket=ticket)
+        except Ticket.DoesNotExist:
+            raise serializers.ValidationError("Ticket not found.")

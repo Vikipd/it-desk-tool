@@ -1,3 +1,5 @@
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND CORRECTED ADMIN DASHBOARD.
+
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -144,7 +146,9 @@ const renderCustomizedLabel = ({
       textAnchor="middle"
       dominantBaseline="central"
       style={{ fontWeight: "bold" }}
-    >{`${(percent * 100).toFixed(0)}%`}</text>
+    >
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
   );
 };
 const prepareChartData = (data, nameKey, valueKey) =>
@@ -160,13 +164,23 @@ const AdminDashboard = () => {
   const queryClient = useQueryClient();
   const { role } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // --- THIS IS THE FIX: Fetch both stats and user profile data ---
   const { data, isLoading, error } = useQuery({
     queryKey: ["adminDashboardData"],
     queryFn: async () => {
-      const res = await api.get("/api/tickets/dashboard-stats/");
-      return { summary: res.data };
+      // We run two API calls at the same time for efficiency
+      const [statsRes, profileRes] = await Promise.all([
+        api.get("/api/tickets/dashboard-stats/"),
+        api.get("/api/auth/me/"),
+      ]);
+      return {
+        summary: statsRes.data,
+        username: profileRes.data.username,
+      };
     },
   });
+  // --- END OF FIX ---
 
   const handleChartClick = (type, data) => {
     const { name } = data.payload;
@@ -194,7 +208,7 @@ const AdminDashboard = () => {
       <div className="p-8 text-center text-red-500">Failed to load data.</div>
     );
 
-  const summary = data?.summary || {};
+  const { summary = {}, username = "" } = data || {};
   const closedTicketsCount =
     summary.by_status?.find((s) => s.status === "CLOSED")?.count || 0;
   const resolvedTicketsCount = summary.resolved_tickets || 0;
@@ -206,17 +220,25 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-slate-50 font-sans">
       <header className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">
-            ResolveFlow Dashboard
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">
+              ResolveFlow Dashboard
+            </h1>
+            {/* --- THIS IS THE FIX: Display the fetched username --- */}
+            <p className="text-sm text-gray-600 mt-1">
+              Welcome, <span className="font-semibold">{username}</span>!
+            </p>
+          </div>
           <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setIsModalOpen(true)}
-              disabled={role === "OBSERVER"}
-              className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-            >
-              <PlusCircle size={18} className="mr-2" /> Create User
-            </button>
+            {/* --- THIS IS THE FIX: Hide "Create User" button for Observers --- */}
+            {role !== "OBSERVER" && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              >
+                <PlusCircle size={18} className="mr-2" /> Create User
+              </button>
+            )}
             <button
               onClick={() => navigate("/filtered-tickets")}
               className="flex items-center font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
@@ -416,6 +438,7 @@ const AdminDashboard = () => {
     </div>
   );
 };
+
 const NavLink = ({ to, children }) => {
   const location = useLocation();
   const isActive = location.pathname === to;
@@ -432,4 +455,5 @@ const NavLink = ({ to, children }) => {
     </Link>
   );
 };
+
 export default AdminDashboard;

@@ -1,7 +1,9 @@
-import { useQueryClient } from "@tanstack/react-query";
+// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL CLIENT DASHBOARD.
+
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useAuth } from "../hooks/useAuth.js";
-import React, { useEffect, useState, useCallback } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import {
   Loader2,
@@ -14,65 +16,78 @@ import {
   CheckCircle,
   Clock,
   ArrowLeft,
+  Search,
 } from "lucide-react";
 import api from "../api.js";
 
-const SummaryCard = ({ title, value, icon, color, to }) => {
-  const content = (
-    <div className="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-      <div className="flex items-center">
-        <div className={`mr-5 p-3 rounded-full ${color}`}>{icon}</div>
-        <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="text-3xl font-bold text-gray-800 tracking-tight">
-            {value}
-          </p>
-        </div>
+const SummaryCard = ({ title, value, icon, color, onClick }) => (
+  <div
+    onClick={onClick}
+    className="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+  >
+    <div className="flex items-center">
+      <div className={`mr-5 p-3 rounded-full ${color}`}>{icon}</div>
+      <div>
+        <p className="text-sm font-medium text-gray-500">{title}</p>
+        <p className="text-3xl font-bold text-gray-800 tracking-tight">
+          {value}
+        </p>
       </div>
     </div>
-  );
-  if (to) return <Link to={to}>{content}</Link>;
-  return content;
-};
+  </div>
+);
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { role } = useAuth();
-  const [tickets, setTickets] = useState([]);
-  const [username, setUsername] = useState("");
-  const [stats, setStats] = useState({ open: 0, closed: 0 });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  const fetchClientData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [ticketsResponse, profileResponse] = await Promise.all([
-        api.get("/api/tickets/"),
-        api.get("/api/auth/me/"),
-      ]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
-      const allTickets = ticketsResponse.data.results || ticketsResponse.data;
-      setTickets(allTickets);
-      setUsername(profileResponse.data.username);
+  const fetchClientData = async () => {
+    const params = { search: debouncedSearchTerm || undefined };
+    const [ticketsResponse, profileResponse] = await Promise.all([
+      api.get("/api/tickets/", { params }),
+      api.get("/api/auth/me/"),
+    ]);
+    return {
+      tickets: ticketsResponse.data.results || ticketsResponse.data,
+      username: profileResponse.data.username,
+    };
+  };
 
-      const openTickets = allTickets.filter(
-        (t) => t.status !== "CLOSED" && t.status !== "RESOLVED"
-      ).length;
-      const closedTickets = allTickets.length - openTickets;
-      setStats({ open: openTickets, closed: closedTickets });
-    } catch (err) {
-      setError("Failed to fetch your tickets. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const { data, error, isLoading } = useQuery({
+    queryKey: ["clientDashboard", debouncedSearchTerm],
+    queryFn: fetchClientData,
+  });
+
+  const { tickets = [], username = "" } = data || {};
+
+  // --- THIS IS THE FIX: Added 'resolved' to the stats calculation ---
+  const stats = useMemo(() => {
+    if (!tickets) return { open: 0, resolved: 0, closed: 0, total: 0 };
+    const openTickets = tickets.filter(
+      (t) => t.status === "OPEN" || t.status === "IN_PROGRESS"
+    ).length;
+    const resolvedTickets = tickets.filter(
+      (t) => t.status === "RESOLVED"
+    ).length;
+    const closedTickets = tickets.filter((t) => t.status === "CLOSED").length;
+    return {
+      open: openTickets,
+      resolved: resolvedTickets,
+      closed: closedTickets,
+      total: tickets.length,
+    };
+  }, [tickets]);
 
   useEffect(() => {
-    fetchClientData();
-  }, [fetchClientData]);
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const handleExport = () => {
     if (!tickets || tickets.length === 0) {
@@ -135,19 +150,13 @@ const ClientDashboard = () => {
     }
   };
 
-  if (isLoading)
-    return (
-      <div className="flex justify-center items-center h-screen bg-slate-50">
-        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-      </div>
-    );
   if (error)
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-slate-50 text-red-600">
         <AlertTriangle className="h-12 w-12 mb-4" />
-        <p className="text-xl font-semibold">{error}</p>
+        <p className="text-xl font-semibold">{error.message}</p>
         <button
-          onClick={fetchClientData}
+          onClick={() => queryClient.invalidateQueries(["clientDashboard"])}
           className="mt-6 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition"
         >
           Try Again
@@ -165,8 +174,9 @@ const ClientDashboard = () => {
                 ? "Client Tickets Overview"
                 : "Client Dashboard"}
             </h1>
+            {/* --- THIS IS THE FIX: A professional and consistent welcome message --- */}
             <p className="text-sm text-gray-600 mt-1">
-              Welcome back, <span className="font-semibold">{username}</span>!
+              Welcome, <span className="font-semibold">{username}</span>!
             </p>
           </div>
           <div className="flex space-x-3">
@@ -202,38 +212,63 @@ const ClientDashboard = () => {
         </div>
       </header>
       <main className="max-w-7xl mx-auto px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        {/* --- THIS IS THE FIX: The layout now uses 4 cards --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           <SummaryCard
             title="Total Tickets"
-            value={tickets.length}
+            value={stats.total}
             icon={<Ticket size={24} className="text-blue-600" />}
             color="bg-blue-100"
-            to="/filtered-tickets"
+            onClick={() => setSearchTerm("")}
           />
           <SummaryCard
             title="Open Tickets"
             value={stats.open}
             icon={<Clock size={24} className="text-yellow-600" />}
             color="bg-yellow-100"
-            to="/filtered-tickets?status=OPEN"
+            onClick={() => setSearchTerm("OPEN")}
+          />
+          <SummaryCard
+            title="Resolved Tickets"
+            value={stats.resolved}
+            icon={<CheckCircle size={24} className="text-purple-600" />}
+            color="bg-purple-100"
+            onClick={() => setSearchTerm("RESOLVED")}
           />
           <SummaryCard
             title="Closed Tickets"
             value={stats.closed}
             icon={<CheckCircle size={24} className="text-green-600" />}
             color="bg-green-100"
-            to="/filtered-tickets?status=CLOSED"
+            onClick={() => setSearchTerm("CLOSED")}
           />
         </div>
         <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200/80">
-          <div className="p-6">
+          <div className="p-6 flex justify-between items-center">
             <h2 className="text-2xl font-bold text-gray-800 tracking-tight">
               {role === "OBSERVER"
                 ? "All Client-Submitted Tickets"
                 : "My Tickets"}
             </h2>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search your tickets..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg"
+              />
+              <Search
+                size={20}
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              />
+            </div>
           </div>
-          {tickets.length > 0 ? (
+          {isLoading ? (
+            <div className="text-center py-20 px-6">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
+            </div>
+          ) : tickets.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full w-full">
                 <thead className="bg-slate-50 border-b border-gray-200">

@@ -26,7 +26,7 @@
 
   "scripts": {
     "start": "react-scripts start",
-    "build": "cross-env NODE_ENV=production react-scripts build",
+    "build": "set REACT_APP_API_URL=http://139.59.68.36&& react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "backend": "cd ../backend && python manage.py runserver",

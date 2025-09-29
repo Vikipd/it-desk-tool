@@ -1,12 +1,11 @@
-# COPY AND PASTE THIS ENTIRE BLOCK
+# --- FIX: load_dotenv() is now at the top of the file. ---
+from dotenv import load_dotenv
+load_dotenv()
 
 from pathlib import Path
 import os
 import dj_database_url
 from datetime import timedelta
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # This path points to the 'backend' folder
@@ -47,13 +46,9 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend']
 }
 
-# ... inside base.py
-
 SIMPLE_JWT = {
-    # --- MODIFICATION START ---
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    # --- MODIFICATION END ---
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": False,
@@ -74,12 +69,10 @@ SIMPLE_JWT = {
     "JTI_CLAIM": "jti",
     "TOKEN_USER_CLASS": "rest_framework_simplejwt.models.TokenUser",
     "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
-    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5), # This is for sliding tokens, not our primary concern
-    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1), # This is for sliding tokens
+    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
     "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.CustomTokenObtainPairSerializer",
 }
-
-# ... rest of your settings.py
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -140,21 +133,4 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# --- TEMPORARY DEBUGGING LOGGER ---
-# This will log DisallowedHost errors even when DEBUG is False.
-# We will remove this after debugging.
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-        },
-    },
-    'loggers': {
-        'django.security.DisallowedHost': {
-            'handlers': ['console'],
-            'level': 'INFO',
-        },
-    },
-}
+# --- FIX: The temporary debugging logger has been removed. ---

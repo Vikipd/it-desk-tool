@@ -1,0 +1,19 @@
+# E:\it-admin-tool\gunicorn.service
+
+[Unit]
+Description=gunicorn daemon for it-desk-tool
+Requires=gunicorn.socket
+After=network.target
+
+[Service]
+User=viki
+Group=www-data
+WorkingDirectory=/home/viki/it-desk-tool/backend
+
+# --- FINAL FIX ---
+# This line now points to the correct python in your venv and the correct wsgi file.
+# It also tells it which settings to use, making it robust.
+ExecStart=/home/viki/it-desk-tool/backend/venv/bin/gunicorn --workers 3 --bind unix:/run/gunicorn.sock helpdesk.wsgi:application
+
+[Install]
+WantedBy=multi-user.target

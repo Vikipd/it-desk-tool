@@ -1,5 +1,3 @@
-# E:\it-admin-tool\gunicorn.service
-
 [Unit]
 Description=gunicorn daemon for it-desk-tool
 Requires=gunicorn.socket
@@ -10,9 +8,11 @@ User=viki
 Group=www-data
 WorkingDirectory=/home/viki/it-desk-tool/backend
 
-# --- FINAL FIX ---
-# This line now points to the correct python in your venv and the correct wsgi file.
-# It also tells it which settings to use, making it robust.
+# --- THE FINAL FIX ---
+# This line explicitly tells the service which settings file to use.
+# This removes all doubt and forces the production configuration.
+Environment="DJANGO_SETTINGS_MODULE=helpdesk.settings.production"
+
 ExecStart=/home/viki/it-desk-tool/backend/venv/bin/gunicorn --workers 3 --bind unix:/run/gunicorn.sock helpdesk.wsgi:application
 
 [Install]

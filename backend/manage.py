@@ -12,7 +12,7 @@ def main():
     # If the variable is not set, it defaults to 'local'.
     # This ensures 'runserver' always uses your local settings.
     environment = os.environ.get('DJANGO_ENV', 'local')
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', f'helpdesk.settings.{environment}')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'helpdesk.settings.production')
     # --- MODIFICATION END ---
     
     try:

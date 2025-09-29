@@ -1,4 +1,4 @@
-#### **Step 1.3: Complete `tickets/urls.py`**
+# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
@@ -27,9 +27,6 @@ urlpatterns = [
     path('cards/card-types/', CardTypeListView.as_view(), name='card-card-types'),
     path('cards/slots/', SlotListView.as_view(), name='card-slots'),
     path('cards/autofill/', CardAutofillView.as_view(), name='card-autofill'),
-    
-    # NEW URL for getting filtered manual dropdown options
     path('cards/filtered-data/<str:field_name>/', FilteredCardDataView.as_view(), name='filtered-card-data'),
-    
     path('', include(router.urls)),
 ]

@@ -1,4 +1,4 @@
-// COPY AND PASTE THIS ENTIRE BLOCK INTO: frontend/src/pages/TicketForm.jsx
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE REDIRECT IS FIXED.
 
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -47,8 +47,6 @@ const ManualApiSelect = ({
 function TicketForm() {
   const navigate = useNavigate();
   const { role } = useAuth();
-
-  // State for selections
   const [selectedZone, setSelectedZone] = useState(null);
   const [selectedState, setSelectedState] = useState(null);
   const [selectedNodeType, setSelectedNodeType] = useState(null);
@@ -62,8 +60,6 @@ function TicketForm() {
   const [attachment, setAttachment] = useState(null);
   const [fileName, setFileName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // State for manual "Other" mode
   const [manualNodeName, setManualNodeName] = useState(null);
   const [manualPrimaryIp, setManualPrimaryIp] = useState(null);
   const [manualAid, setManualAid] = useState(null);
@@ -72,14 +68,10 @@ function TicketForm() {
   const [manualSlot, setManualSlot] = useState("");
   const [manualSerialNumber, setManualSerialNumber] = useState("");
 
-  // --- Data Fetching (ALL URLs are now corrected with /api/) ---
   const { data: zones, isLoading: isLoadingZones } = useQuery({
     queryKey: ["zones"],
-    // --- THIS IS THE FIX ---
     queryFn: () => api.get("/api/cards/zones/").then((res) => res.data),
   });
-  // --- END OF FIX ---
-  
   const { data: states, isLoading: isLoadingStates } = useQuery({
     queryKey: ["states", selectedZone],
     queryFn: () =>
@@ -162,9 +154,6 @@ function TicketForm() {
     retry: false,
   });
 
-  // The rest of your component logic is correct and remains unchanged.
-  // I am including the full file for you to copy-paste easily.
-  
   const handleSelectChange = (setter, resetFields) => (option) => {
     setter(option);
     resetFields.forEach((fieldSetter) => fieldSetter(null));
@@ -187,6 +176,7 @@ function TicketForm() {
     setAttachment(file);
     setFileName(file ? file.name : "");
   };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const isManualMode = selectedCardType?.value === "Other";
@@ -227,7 +217,6 @@ function TicketForm() {
     if (attachment) {
       data.append("attachment", attachment);
     }
-
     if (isManualMode) {
       data.append("other_card_type_description", otherCardDescription);
       data.append("zone", selectedZone.value);
@@ -248,7 +237,17 @@ function TicketForm() {
     try {
       await api.post("/api/tickets/", data);
       toast.success("Ticket created successfully!");
-      navigate(role === "CLIENT" ? "/client-dashboard" : "/admin-dashboard");
+
+      // --- MODIFICATION: THIS IS THE CORRECT, PROFESSIONAL REDIRECT LOGIC ---
+      if (role === "CLIENT") {
+        navigate("/client-dashboard");
+      } else if (role === "TECHNICIAN") {
+        navigate("/technician-dashboard");
+      } else if (role === "ADMIN") {
+        navigate("/admin-dashboard");
+      } else {
+        navigate(-1); // Go back as a fallback
+      }
     } catch (err) {
       const errorData = err.response?.data;
       if (errorData && typeof errorData === "object") {
@@ -401,7 +400,6 @@ function TicketForm() {
                 </div>
               </div>
             </fieldset>
-
             {(autofilledData || isAutofilling) && !isManualMode && (
               <fieldset className="p-4 border rounded-lg bg-gray-50">
                 <legend className="px-2 text-lg font-semibold text-orange-700">
@@ -447,7 +445,6 @@ function TicketForm() {
                 )}
               </fieldset>
             )}
-
             {isManualMode && (
               <fieldset className="p-4 border rounded-lg bg-yellow-50">
                 <legend className="px-2 text-lg font-semibold text-yellow-800">
@@ -573,7 +570,6 @@ function TicketForm() {
                 </div>
               </fieldset>
             )}
-
             <fieldset className="p-4 border rounded-lg">
               <legend className="px-2 text-lg font-semibold text-gray-800">
                 Fault Information

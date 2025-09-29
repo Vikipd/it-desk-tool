@@ -1,11 +1,10 @@
-// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL, CORRECTED ADMIN DASHBOARD.
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE BUG IS FIXED.
 
 import React, { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../hooks/useAuth";
 import api from "../api";
-import { toast } from "react-hot-toast";
 import {
   PieChart,
   Pie,
@@ -16,7 +15,6 @@ import {
 } from "recharts";
 import {
   Users,
-  LogOut,
   Ticket,
   PlusCircle,
   AlertTriangle,
@@ -27,6 +25,7 @@ import {
   TrendingDown,
 } from "lucide-react";
 import UserModal from "../components/UserModal";
+import DashboardLayout from "../layouts/DashboardLayout";
 
 const DashboardCard = ({
   title,
@@ -56,7 +55,6 @@ const DashboardCard = ({
     : isActionCard
     ? "text-orange-600"
     : "text-slate-600";
-
   const cardContent = (
     <div
       className={`${cardClasses} p-6 rounded-xl shadow-lg flex items-center w-full h-full hover:shadow-xl hover:-translate-y-1 transition-all duration-300`}
@@ -168,9 +166,7 @@ const renderCustomizedLabel = ({
       textAnchor="middle"
       dominantBaseline="central"
       style={{ fontWeight: "bold" }}
-    >
-      {`${(percent * 100).toFixed(0)}%`}
-    </text>
+    >{`${(percent * 100).toFixed(0)}%`}</text>
   );
 };
 const prepareChartData = (data, nameKey, valueKey) =>
@@ -186,7 +182,6 @@ const AdminDashboard = () => {
   const queryClient = useQueryClient();
   const { role } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
-
   const { data, isLoading, error } = useQuery({
     queryKey: ["adminDashboardData"],
     queryFn: async () => {
@@ -194,46 +189,37 @@ const AdminDashboard = () => {
         api.get("/api/tickets/dashboard-stats/"),
         api.get("/api/auth/me/"),
       ]);
-      return {
-        summary: statsRes.data,
-        username: profileRes.data.username,
-      };
+      return { summary: statsRes.data, username: profileRes.data.username };
     },
   });
-
-  // --- THIS IS THE FINAL FIX: The new, professional logout handler ---
-  const handleLogout = () => {
-    // 1. Cancel any API calls that are currently happening.
-    queryClient.cancelQueries();
-
-    // 2. Clear all user data from local storage.
-    localStorage.clear();
-
-    // 3. Clear the entire react-query cache.
-    queryClient.clear();
-
-    // 4. Navigate to the login page.
-    navigate("/login");
-    toast.success("Logged out.");
-  };
-  // --- END OF FIX ---
 
   const handleChartClick = (type, data) => {
     const { name } = data.payload;
     if (!name || name === "N/A") return;
     let queryParam = "";
-    switch (type) {
-      case "status":
-        queryParam = `status=${name}`;
-        break;
-      case "priority":
-        queryParam = `priority=${name}`;
-        break;
-      case "category":
-        queryParam = `search=${encodeURIComponent(name)}`;
-        break;
-      default:
-        return;
+    // --- MODIFICATION: IF THE STATUS IS ONE OF THE "IN PROGRESS" TYPES, COMBINE THEM ---
+    const inProgressStatuses = [
+      "IN_PROGRESS",
+      "IN_TRANSIT",
+      "UNDER_REPAIR",
+      "ON_HOLD",
+    ];
+    if (type === "status" && inProgressStatuses.includes(name)) {
+      queryParam = `status=${inProgressStatuses.join(",")}`;
+    } else {
+      switch (type) {
+        case "status":
+          queryParam = `status=${name}`;
+          break;
+        case "priority":
+          queryParam = `priority=${name}`;
+          break;
+        case "category":
+          queryParam = `search=${encodeURIComponent(name)}`;
+          break;
+        default:
+          return;
+      }
     }
     navigate(`/filtered-tickets?${queryParam}`);
   };
@@ -246,218 +232,197 @@ const AdminDashboard = () => {
 
   const { summary = {}, username = "" } = data || {};
   const slaTargets = { CRITICAL: 10, HIGH: 20, MEDIUM: 30, LOW: 40 };
+  const headerActions = (
+    <>
+      <button
+        onClick={() => navigate("/ticket-form")}
+        disabled={role === "OBSERVER"}
+        className="flex items-center font-semibold bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
+      >
+        <PlusCircle size={16} className="mr-2" /> Submit Ticket
+      </button>
+      {role !== "OBSERVER" && (
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm"
+        >
+          <PlusCircle size={16} className="mr-2" /> Create User
+        </button>
+      )}
+      <button
+        onClick={() => navigate("/filtered-tickets")}
+        className="flex items-center font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
+      >
+        <Ticket size={16} className="mr-2" /> View All Tickets
+      </button>
+    </>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
-      <header className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">
-              ResolveFlow Dashboard
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Welcome, <span className="font-semibold">{username}</span>!
-            </p>
-          </div>
-          <div className="flex items-center space-x-3">
-            {role !== "OBSERVER" && (
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-              >
-                <PlusCircle size={18} className="mr-2" /> Create User
-              </button>
-            )}
-            <button
-              onClick={() => navigate("/filtered-tickets")}
-              className="flex items-center font-semibold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-            >
-              <Ticket size={18} className="mr-2" /> View All Tickets
-            </button>
-            <button
-              // --- FIX: Use the new, robust logout handler ---
-              onClick={handleLogout}
-              className="flex items-center font-semibold bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
-            >
-              <LogOut size={18} className="mr-2" /> Logout
-            </button>
+    <DashboardLayout
+      pageTitle="Dashboard"
+      username={username}
+      headerActions={headerActions}
+    >
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
+        <DashboardCard
+          title="Total Tickets"
+          value={summary.total_tickets || 0}
+          icon={<Ticket size={24} />}
+          to="/filtered-tickets"
+        />
+        <DashboardCard
+          title="Open Tickets"
+          value={summary.open_tickets || 0}
+          icon={<AlertTriangle size={24} />}
+          to="/filtered-tickets?status=OPEN"
+        />
+        {/* --- MODIFICATION: THIS IS THE CORRECT LINK FOR THE "IN PROGRESS" CARD --- */}
+        <DashboardCard
+          title="In Progress"
+          value={summary.in_progress_tickets || 0}
+          icon={<Clock size={24} />}
+          to="/filtered-tickets?status=IN_PROGRESS,IN_TRANSIT,UNDER_REPAIR,ON_HOLD"
+        />
+        <DashboardCard
+          title="Resolved Tickets"
+          value={summary.resolved_tickets || 0}
+          icon={<Bell size={24} />}
+          to="/filtered-tickets?status=RESOLVED"
+          isActionCard={true}
+        />
+        <DashboardCard
+          title="Closed Tickets"
+          value={summary.closed_tickets || 0}
+          icon={<CheckCircle size={24} />}
+          to="/filtered-tickets?status=CLOSED"
+        />
+        <DashboardCard
+          title="Total Users"
+          value={summary.total_users || 0}
+          icon={<Users size={24} />}
+          to="/user-management"
+          isUserCard={true}
+        />
+      </div>
+      <div className="mb-10">
+        <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+          <Clock className="mr-3 text-gray-400" /> SLA Performance Overview
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {Object.entries(slaTargets).map(([priority, days]) => (
+            <SlaPerformanceCard
+              key={priority}
+              priority={priority}
+              targetDays={days}
+              summary={summary}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+        <div className="bg-white p-6 rounded-xl shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Tickets by Status</h3>
+          <div style={{ width: "100%", height: 250 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie
+                  data={prepareChartData(summary.by_status, "status", "count")}
+                  onClick={(data) => handleChartClick("status", data)}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={90}
+                  labelLine={false}
+                  label={renderCustomizedLabel}
+                  className="cursor-pointer"
+                >
+                  {(summary.by_status || []).map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </div>
-      </header>
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center space-x-6 border-b">
-            <NavLink to="/admin-dashboard">Admin Overview</NavLink>
-            <NavLink to="/client-dashboard">Client View</NavLink>
-            <NavLink to="/technician-dashboard">Engineer View</NavLink>
-            <NavLink to="/filtered-tickets">All Tickets (Filtered)</NavLink>
+        <div className="bg-white p-6 rounded-xl shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Tickets by Priority</h3>
+          <div style={{ width: "100%", height: 250 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie
+                  data={prepareChartData(
+                    summary.by_priority,
+                    "priority",
+                    "count"
+                  )}
+                  onClick={(data) => handleChartClick("priority", data)}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={90}
+                  labelLine={false}
+                  label={renderCustomizedLabel}
+                  className="cursor-pointer"
+                >
+                  {(summary.by_priority || []).map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </div>
-      </nav>
-      <main className="max-w-7xl mx-auto px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
-          <DashboardCard
-            title="Total Tickets"
-            value={summary.total_tickets || 0}
-            icon={<Ticket size={24} />}
-            to="/filtered-tickets"
-          />
-          <DashboardCard
-            title="Open Tickets"
-            value={summary.open_tickets || 0}
-            icon={<AlertTriangle size={24} />}
-            to="/filtered-tickets?status=OPEN"
-          />
-          <DashboardCard
-            title="In Progress"
-            value={summary.in_progress_tickets || 0}
-            icon={<Clock size={24} />}
-            to="/filtered-tickets?status=IN_PROGRESS"
-          />
-          <DashboardCard
-            title="Resolved Tickets"
-            value={summary.resolved_tickets || 0}
-            icon={<Bell size={24} />}
-            to="/filtered-tickets?status=RESOLVED"
-            isActionCard={true}
-          />
-          <DashboardCard
-            title="Closed Tickets"
-            value={summary.closed_tickets || 0}
-            icon={<CheckCircle size={24} />}
-            to="/filtered-tickets?status=CLOSED"
-          />
-          <DashboardCard
-            title="Total Users"
-            value={summary.total_users || 0}
-            icon={<Users size={24} />}
-            to="/user-management"
-            isUserCard={true}
-          />
-        </div>
-        <div className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center">
-            <Clock className="mr-3 text-gray-400" /> SLA Performance Overview
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {Object.entries(slaTargets).map(([priority, days]) => (
-              <SlaPerformanceCard
-                key={priority}
-                priority={priority}
-                targetDays={days}
-                summary={summary}
-              />
-            ))}
+        <div className="bg-white p-6 rounded-xl shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Tickets by Category</h3>
+          <div style={{ width: "100%", height: 250 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie
+                  data={prepareChartData(
+                    summary.by_category,
+                    "card_category",
+                    "count"
+                  )}
+                  onClick={(data) => handleChartClick("category", data)}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={90}
+                  labelLine={false}
+                  label={renderCustomizedLabel}
+                  className="cursor-pointer"
+                >
+                  {(summary.by_category || []).map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
-          <div className="bg-white p-6 rounded-xl shadow-lg">
-            <h3 className="text-lg font-semibold mb-4">Tickets by Status</h3>
-            <div style={{ width: "100%", height: 250 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={prepareChartData(
-                      summary.by_status,
-                      "status",
-                      "count"
-                    )}
-                    onClick={(data) => handleChartClick("status", data)}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={90}
-                    labelLine={false}
-                    label={renderCustomizedLabel}
-                    className="cursor-pointer"
-                  >
-                    {(summary.by_status || []).map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-lg">
-            <h3 className="text-lg font-semibold mb-4">Tickets by Priority</h3>
-            <div style={{ width: "100%", height: 250 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={prepareChartData(
-                      summary.by_priority,
-                      "priority",
-                      "count"
-                    )}
-                    onClick={(data) => handleChartClick("priority", data)}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={90}
-                    labelLine={false}
-                    label={renderCustomizedLabel}
-                    className="cursor-pointer"
-                  >
-                    {(summary.by_priority || []).map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-lg">
-            <h3 className="text-lg font-semibold mb-4">Tickets by Category</h3>
-            <div style={{ width: "100%", height: 250 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={prepareChartData(
-                      summary.by_category,
-                      "card_category",
-                      "count"
-                    )}
-                    onClick={(data) => handleChartClick("category", data)}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={90}
-                    labelLine={false}
-                    label={renderCustomizedLabel}
-                    className="cursor-pointer"
-                  >
-                    {(summary.by_category || []).map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      </main>
+      </div>
       {isModalOpen && (
         <UserModal
           onClose={() => setIsModalOpen(false)}
@@ -467,23 +432,7 @@ const AdminDashboard = () => {
           }}
         />
       )}
-    </div>
-  );
-};
-const NavLink = ({ to, children }) => {
-  const location = useLocation();
-  const isActive = location.pathname === to;
-  return (
-    <Link
-      to={to}
-      className={`py-4 px-1 text-sm font-semibold ${
-        isActive
-          ? "border-b-2 border-blue-600 text-blue-600"
-          : "border-b-2 border-transparent text-gray-500 hover:text-gray-800"
-      }`}
-    >
-      {children}
-    </Link>
+    </DashboardLayout>
   );
 };
 export default AdminDashboard;

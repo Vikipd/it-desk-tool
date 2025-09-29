@@ -1,7 +1,7 @@
-// COPY AND PASTE THIS ENTIRE BLOCK. THIS REMOVES THE FINAL WARNING.
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query"; // --- FIX: Removed unused 'useQueryClient' ---
+import { useMutation } from "@tanstack/react-query";
 import { X, Eye, EyeOff, KeyRound } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../api";
@@ -13,6 +13,7 @@ const UserModal = ({ user, onClose, onSave }) => {
     first_name: "",
     last_name: "",
     username: "",
+    email: "", // <-- MODIFICATION: ADDED EMAIL
     phone_number: "",
     role: "CLIENT",
     password: "",
@@ -33,6 +34,7 @@ const UserModal = ({ user, onClose, onSave }) => {
         first_name: user.first_name || "",
         last_name: user.last_name || "",
         username: user.username || "",
+        email: user.email || "", // <-- MODIFICATION: ADDED EMAIL
         phone_number: user.phone_number || "",
         role: user.role || "CLIENT",
         password: "",
@@ -53,6 +55,7 @@ const UserModal = ({ user, onClose, onSave }) => {
           username: userData.username,
           first_name: userData.first_name,
           last_name: userData.last_name,
+          email: userData.email, // <-- MODIFICATION: ADDED EMAIL
           phone_number: userData.phone_number,
           role: userData.role,
         };
@@ -168,6 +171,16 @@ const UserModal = ({ user, onClose, onSave }) => {
               title="Please enter a 10-digit phone number."
             />
           </div>
+          {/* --- MODIFICATION: EMAIL FIELD ADDED --- */}
+          <InputField
+            label="Email Address"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            placeholder="e.g., user@example.com"
+          />
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Select role

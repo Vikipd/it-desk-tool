@@ -1,4 +1,4 @@
-# COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND CORRECTED VIEWS.PY FILE.
+# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from rest_framework import generics, permissions, status, views
 from rest_framework.response import Response
@@ -11,12 +11,36 @@ from .serializers import (
     UserUpdateSerializer,
     AdminPasswordResetSerializer,
     ForcedChangePasswordSerializer,
-    ChangePasswordSerializer
+    ChangePasswordSerializer,
+    UserDetailsValidationSerializer # <-- MODIFICATION: Import the new serializer
 )
 from .permissions import IsAdminOrReadOnly, IsAdminRole
 
+# --- MODIFICATION: NEW VIEW FOR "FORGOT PASSWORD" ---
+class UserDetailsValidationView(views.APIView):
+    """
+    Validates user details for password reset requests.
+    This view is public and does not require authentication.
+    """
+    permission_classes = [permissions.AllowAny]
+    serializer_class = UserDetailsValidationSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            # The validation logic is handled entirely within the serializer.
+            # If we get here, it means the user exists and the details match.
+            return Response({"success": "User details validated successfully."}, status=status.HTTP_200_OK)
+        
+        # If the serializer is not valid, it will contain the error messages.
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_serializer(self, *args, **kwargs):
+        return self.serializer_class(*args, **kwargs)
+# --- END OF NEW VIEW ---
+
+
 class ChangePasswordView(generics.UpdateAPIView):
-    # --- THIS IS THE FIX: We now use the correct serializer ---
     serializer_class = ForcedChangePasswordSerializer
     model = User
     permission_classes = (permissions.IsAuthenticated,)

@@ -6,6 +6,8 @@
 
 # Environment variables - CRITICAL
 backend/.env
+# --- FIX --- Added the production env file
+backend/.env.prod
 
 # Virtual Environments
 backend/venv/
@@ -21,6 +23,9 @@ backend/**/*.pyc
 
 # Database files
 backend/db.sqlite3
+
+# --- FIX --- Added rule to ignore large data files
+*.xlsx
 
 # --- React Frontend ---
 

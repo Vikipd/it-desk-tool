@@ -1,4 +1,4 @@
-# E:\it-admin-tool\backend\accounts\permissions.py
+# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from rest_framework import permissions
 from .models import User
@@ -28,3 +28,14 @@ class IsAdminOrReadOnly(permissions.BasePermission):
             request.user.is_superuser or
             (hasattr(request.user, 'role') and request.user.role == User.ADMIN)
         )
+
+# --- MODIFICATION: THIS IS THE PERMISSION I FORGOT TO CREATE ---
+class IsTechnicianRole(permissions.BasePermission):
+    """
+    Custom permission to only allow users with the TECHNICIAN role.
+    """
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and (
+            hasattr(request.user, 'role') and request.user.role == User.TECHNICIAN
+        )
+# --- END OF MODIFICATION ---

@@ -1,3 +1,5 @@
+# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
+
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
@@ -8,7 +10,8 @@ from .views import (
     UserRetrieveUpdateDestroyView,
     AdminPasswordResetView,
     RestoreUserView,
-    ChangePasswordView # <-- MODIFICATION: Import the new view
+    ChangePasswordView,
+    UserDetailsValidationView # <-- MODIFICATION: Import the new view
 )
 
 urlpatterns = [
@@ -17,8 +20,10 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/me/', UserDetailView.as_view(), name='user-detail'),
     
-    # --- NEW: Self-service password change URL ---
+    # --- Password Management ---
     path('auth/change-password/', ChangePasswordView.as_view(), name='change-password'),
+    # --- MODIFICATION: NEW URL FOR "FORGOT PASSWORD" ---
+    path('auth/validate-user-details/', UserDetailsValidationView.as_view(), name='validate-user-details'),
 
     # --- User Management (for Admins) ---
     path('users/', UserListCreateView.as_view(), name='user-list-create'),

@@ -1,15 +1,32 @@
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THIS FIXES THE LOGIN.
+
+import { jwtDecode } from 'jwt-decode';
 import { ACCESS_TOKEN } from '../constants';
 
-// This is our single source of truth for authentication.
-// It performs a direct, synchronous check of localStorage.
+// THIS IS THE CORRECT, SYNCHRONOUS HOOK. IT IS FAST AND RELIABLE.
 export const useAuth = () => {
     const token = localStorage.getItem(ACCESS_TOKEN);
-    const role = localStorage.getItem('role');
 
-    // Return the user's status in a clear object.
-    return { 
-        isAuthenticated: !!token, // true if a token exists, false otherwise
-        role: role,
-        // Add other details here if needed in the future
-    };
+    // If there is no token, the user is not authenticated.
+    if (!token) {
+        return { isAuthenticated: false, role: null, user: { id: null } };
+    }
+
+    try {
+        // If there is a token, decode it instantly.
+        const decodedToken = jwtDecode(token);
+        const role = decodedToken.role;
+        const user_id = decodedToken.user_id;
+
+        // Return the user's true status.
+        return { 
+            isAuthenticated: true, 
+            role: role,
+            user: { id: user_id } // This provides user.id to the TicketDetail page
+        };
+    } catch (error) {
+        // If the token is corrupted or invalid, the user is not authenticated.
+        console.error("Invalid token found in localStorage", error);
+        return { isAuthenticated: false, role: null, user: { id: null } };
+    }
 };

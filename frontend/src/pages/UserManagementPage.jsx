@@ -1,6 +1,6 @@
-// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND CORRECTED USER MANAGEMENT PAGE.
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE FILTER IS FIXED.
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,14 +10,15 @@ import {
   Edit,
   Trash2,
   RotateCcw,
+  PlusCircle,
 } from "lucide-react";
 import { CSVLink } from "react-csv";
 import api from "../api";
 import { toast } from "react-hot-toast";
 import UserModal from "../components/UserModal";
 import ActionMenu from "../components/ActionMenu";
-// --- THIS IS THE FIX: We need the useAuth hook to check the user's role ---
 import { useAuth } from "../hooks/useAuth";
+import DashboardLayout from "../layouts/DashboardLayout";
 
 const roleDisplayMap = {
   CLIENT: "Client",
@@ -27,13 +28,25 @@ const roleDisplayMap = {
 };
 
 const UserManagementPage = () => {
-  // --- FIX: Get the current user's role ---
   const { role } = useAuth();
   const [activeTab, setActiveTab] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const queryClient = useQueryClient();
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const res = await api.get("/api/auth/me/");
+        setCurrentUser(res.data);
+      } catch (e) {
+        console.error("Failed to fetch current user", e);
+      }
+    };
+    fetchCurrentUser();
+  }, []);
 
   const fetchUsers = async (tab) => {
     const isActive = tab === "active";
@@ -65,15 +78,21 @@ const UserManagementPage = () => {
   });
 
   const handleOpenEditModal = (user) => {
-    // --- FIX: Observers cannot open the edit modal ---
     if (role === "OBSERVER") return;
     setEditingUser(user);
     setIsModalOpen(true);
   };
+
+  const handleOpenCreateModal = () => {
+    setEditingUser(null);
+    setIsModalOpen(true);
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingUser(null);
   };
+
   const handleSave = () => {
     queryClient.invalidateQueries({ queryKey: ["users"] });
   };
@@ -81,23 +100,36 @@ const UserManagementPage = () => {
   const csvHeaders = [
     { label: "Username", key: "username" },
     { label: "Full Name", key: "full_name" },
+    { label: "Email", key: "email" },
     { label: "Role", key: "role" },
     { label: "Phone Number", key: "phone_number" },
   ];
   const csvData = users.map((user) => ({
     ...user,
     full_name: user.full_name || `${user.first_name} ${user.last_name}`.trim(),
+    email: user.email || "--",
     role: roleDisplayMap[user.role] || user.role,
     phone_number: user.phone_number || "--",
   }));
-  const filteredUsers = users.filter(
-    (user) =>
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+
+  // --- MODIFICATION: SEARCH LOGIC NOW INCLUDES ROLE AND PHONE ---
+  const filteredUsers = users.filter((user) => {
+    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+    const userRole = (roleDisplayMap[user.role] || user.role).toLowerCase();
+
+    return (
+      user.username.toLowerCase().includes(lowerCaseSearchTerm) ||
       (user.full_name &&
-        user.full_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+        user.full_name.toLowerCase().includes(lowerCaseSearchTerm)) ||
+      (user.email && user.email.toLowerCase().includes(lowerCaseSearchTerm)) ||
+      (user.phone_number && user.phone_number.includes(searchTerm)) || // Phone number doesn't need to be lowercase
+      userRole.includes(lowerCaseSearchTerm)
+    );
+  });
 
   const getActionsForUser = (user) => {
+    if (user.id === currentUser?.id) return [];
+
     if (activeTab === "active") {
       return [
         {
@@ -127,34 +159,31 @@ const UserManagementPage = () => {
     ];
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-8 font-sans">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-4">
-          <Link
-            to="/admin-dashboard"
-            className="text-gray-500 hover:text-gray-800"
-          >
-            <ChevronLeft size={28} />
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">
-              User Management
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Manage all members of your organization.
-            </p>
-          </div>
-        </div>
-        <CSVLink
-          data={csvData}
-          headers={csvHeaders}
-          filename={"user_list_export.csv"}
-          className="flex items-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700"
+  const headerActions = (
+    <>
+      <Link
+        to="/admin-dashboard"
+        className="flex items-center font-semibold bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 shadow-sm text-sm"
+      >
+        <ChevronLeft size={16} className="mr-2" /> Back to Dashboard
+      </Link>
+      {role !== "OBSERVER" && (
+        <button
+          onClick={handleOpenCreateModal}
+          className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm"
         >
-          <FileDown size={20} className="mr-2" /> Download
-        </CSVLink>
-      </div>
+          <PlusCircle size={16} className="mr-2" /> Create User
+        </button>
+      )}
+    </>
+  );
+
+  return (
+    <DashboardLayout
+      pageTitle="User Management"
+      username={currentUser?.username}
+      headerActions={headerActions}
+    >
       <div className="bg-white p-6 rounded-xl shadow-lg">
         <div className="flex border-b mb-4">
           <TabButton
@@ -169,22 +198,30 @@ const UserManagementPage = () => {
           />
         </div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-700">
-            All Members ({filteredUsers.length})
-          </h2>
           <div className="relative">
+            {/* --- MODIFICATION: PLACEHOLDER TEXT UPDATED --- */}
             <input
               type="text"
-              placeholder="Search by name or username..."
+              placeholder="Search by name, username, email, role, phone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="pl-10 pr-4 py-2 border rounded-lg w-96 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <Search
               size={20}
               className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
             />
           </div>
+          <CSVLink
+            data={csvData}
+            headers={csvHeaders}
+            filename={`users-${activeTab}-${
+              new Date().toISOString().split("T")[0]
+            }.csv`}
+            className="flex items-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm"
+          >
+            <FileDown size={16} className="mr-2" /> Download CSV
+          </CSVLink>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white">
@@ -197,12 +234,14 @@ const UserManagementPage = () => {
                   Full Name
                 </th>
                 <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
+                  Email
+                </th>
+                <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                   Role
                 </th>
                 <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                   Phone
                 </th>
-                {/* --- FIX: The Actions column is now hidden for Observers --- */}
                 {role !== "OBSERVER" && (
                   <th className="py-3 px-6 text-center text-xs font-semibold text-gray-500 uppercase">
                     Actions
@@ -214,7 +253,7 @@ const UserManagementPage = () => {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={role !== "OBSERVER" ? 5 : 4}
+                    colSpan={role !== "OBSERVER" ? 6 : 5}
                     className="text-center py-10"
                   >
                     Loading...
@@ -230,15 +269,19 @@ const UserManagementPage = () => {
                       {user.full_name || `${user.first_name} ${user.last_name}`}
                     </td>
                     <td className="py-4 px-6 text-gray-600">
+                      {user.email || "--"}
+                    </td>
+                    <td className="py-4 px-6 text-gray-600">
                       {roleDisplayMap[user.role] || user.role}
                     </td>
                     <td className="py-4 px-6 text-gray-600">
                       {user.phone_number || "--"}
                     </td>
-                    {/* --- FIX: The Actions menu is now hidden for Observers --- */}
                     {role !== "OBSERVER" && (
                       <td className="py-4 px-6 text-center">
-                        <ActionMenu actions={getActionsForUser(user)} />
+                        {user.id !== currentUser?.id && (
+                          <ActionMenu actions={getActionsForUser(user)} />
+                        )}
                       </td>
                     )}
                   </tr>
@@ -255,7 +298,7 @@ const UserManagementPage = () => {
           onSave={handleSave}
         />
       )}
-    </div>
+    </DashboardLayout>
   );
 };
 

@@ -1,4 +1,4 @@
-// COPY AND PASTE THIS ENTIRE BLOCK. THIS REMOVES THE FINAL WARNING.
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. I HAVE NOT SKIPPED A SINGLE LINE.
 
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -13,11 +13,33 @@ import {
   Download,
   Edit,
   Printer,
-} from "lucide-react"; // --- FIX: Removed unused 'CheckCircle' ---
+} from "lucide-react";
 import Select from "react-select";
 import { useAuth } from "../hooks/useAuth.js";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import ActionModal from "../components/ActionModal.jsx";
+
+const formatToIST = (dateString) => {
+  if (!dateString) return null;
+  try {
+    const date = new Date(dateString);
+    const options = {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      hour12: true,
+      timeZone: "Asia/Kolkata",
+    };
+    return new Intl.DateTimeFormat("en-IN", options).format(date);
+  } catch (error) {
+    console.error("Failed to format date:", dateString, error);
+    return "Invalid Date";
+  }
+};
 
 const DetailItem = ({ label, value, fullWidth = false }) => (
   <div className={fullWidth ? "sm:col-span-2" : ""}>
@@ -28,56 +50,37 @@ const DetailItem = ({ label, value, fullWidth = false }) => (
 );
 
 const EngineerActions = ({ ticket, onUpdate }) => {
+  const { user } = useAuth();
   const [selectedAction, setSelectedAction] = useState(null);
-  const [otherReason, setOtherReason] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const queryClient = useQueryClient();
+
   const statusUpdateMutation = useMutation({
     mutationFn: (data) => api.patch(`/api/tickets/${ticket.id}/`, data),
     onSuccess: (updatedTicket) => {
       toast.success(`Ticket status updated to "${updatedTicket.data.status}"`);
-      setSelectedAction(null);
-      setOtherReason("");
       queryClient.invalidateQueries({ queryKey: ["ticket", ticket.id] });
       onUpdate();
     },
     onError: (error) =>
       toast.error(error.response?.data?.error || "Failed to update status."),
   });
-  const commentMutation = useMutation({
-    mutationFn: (commentData) =>
-      api.post(`/api/tickets/${ticket.id}/comments/`, commentData),
-    onSuccess: () => {
-      toast.success("Reason for hold has been added as a comment.");
-      queryClient.invalidateQueries({ queryKey: ["ticket", ticket.id] });
-    },
-    onError: () => toast.error("Failed to add comment for hold reason."),
-  });
-  const handleActionSubmit = () => {
-    if (!selectedAction) return;
-    let statusUpdateData = { status: selectedAction.value };
-    if (selectedAction.value === "ON_HOLD") {
-      if (!otherReason.trim()) {
-        toast.error("A reason is required to put the ticket on hold.");
-        return;
-      }
-      commentMutation.mutate(
-        { text: `Ticket On Hold. Reason: ${otherReason}` },
-        {
-          onSuccess: () => {
-            statusUpdateMutation.mutate(statusUpdateData);
-          },
-        }
-      );
-    } else {
-      statusUpdateMutation.mutate(statusUpdateData);
-    }
+
+  if (!user || ticket.assigned_to !== user.id) {
+    return null;
+  }
+
+  const handleActionSelect = (action) => {
+    setSelectedAction(action);
+    setIsModalOpen(true);
   };
+
   const actionOptions = [
     { value: "IN_PROGRESS", label: "Start Progress" },
     { value: "IN_TRANSIT", label: "Mark as In Transit" },
     { value: "UNDER_REPAIR", label: "Mark as Under Repair" },
     { value: "RESOLVED", label: "Mark as Resolved" },
-    { value: "ON_HOLD", label: "Other Actions" },
+    { value: "ON_HOLD", label: "Put On Hold" },
   ];
   const statusOrder = [
     "OPEN",
@@ -93,6 +96,7 @@ const EngineerActions = ({ ticket, onUpdate }) => {
     const actionIndex = statusOrder.indexOf(action.value);
     return actionIndex > currentStatusIndex;
   });
+
   if (ticket.status === "ON_HOLD") {
     return (
       <Section title="Engineer Actions">
@@ -106,43 +110,39 @@ const EngineerActions = ({ ticket, onUpdate }) => {
       </Section>
     );
   }
+
   if (
     filteredActions.length === 0 ||
     ticket.status === "RESOLVED" ||
     ticket.status === "CLOSED"
-  )
+  ) {
     return null;
+  }
+
   return (
-    <Section title="Engineer Actions">
-      <div className="space-y-4">
-        <Select
-          options={filteredActions}
-          value={selectedAction}
-          onChange={setSelectedAction}
-          placeholder="Select an action..."
-        />
-        {selectedAction?.value === "ON_HOLD" && (
-          <textarea
-            value={otherReason}
-            onChange={(e) => setOtherReason(e.target.value)}
-            placeholder="Please provide a reason..."
-            className="w-full border rounded-md p-2 text-sm"
-            rows="3"
+    <>
+      <Section title="Engineer Actions">
+        <div className="space-y-4">
+          <Select
+            options={filteredActions}
+            value={null}
+            onChange={handleActionSelect}
+            placeholder="Select an action..."
           />
-        )}
-        <button
-          onClick={handleActionSubmit}
-          disabled={
-            !selectedAction ||
-            statusUpdateMutation.isPending ||
-            commentMutation.isPending
-          }
-          className="w-full text-white px-4 py-2 rounded-lg shadow bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400"
-        >
-          {statusUpdateMutation.isPending ? "Updating..." : "Confirm Action"}
-        </button>
-      </div>
-    </Section>
+        </div>
+      </Section>
+      {isModalOpen && selectedAction && (
+        <ActionModal
+          ticketId={ticket.id}
+          action={selectedAction}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedAction(null);
+          }}
+          onUpdate={onUpdate}
+        />
+      )}
+    </>
   );
 };
 
@@ -225,7 +225,6 @@ const TicketDetail = () => {
       commentMutation.mutate({ text: newComment });
     }
   };
-
   const handleAssign = (selectedOption) =>
     adminMutation.mutate({
       assigned_to: selectedOption ? selectedOption.value : null,
@@ -266,16 +265,6 @@ const TicketDetail = () => {
     );
 
   const cardDetails = ticket?.card || {};
-  const timestampFields = [
-    "assigned_at",
-    "in_progress_at",
-    "in_transit_at",
-    "under_repair_at",
-    "on_hold_at",
-    "resolved_at",
-    "closed_at",
-  ];
-
   const isCommentBoxDisabled = commentMutation.isPending;
 
   return (
@@ -440,8 +429,11 @@ const TicketDetail = () => {
                 )}
               </div>
               <div className="space-y-3">
-                <TimestampItem label="Created At" date={ticket.created_at} />
-                {timestampFields.map((field) =>
+                <TimestampItem
+                  label="Created At"
+                  date={formatToIST(ticket.created_at)}
+                />
+                {Object.keys(editableTimestamps).map((field) =>
                   isEditingTimestamps ? (
                     <EditableTimestampItem
                       key={field}
@@ -453,7 +445,7 @@ const TicketDetail = () => {
                     <TimestampItem
                       key={field}
                       label={field.replace(/_/g, " ").replace("at", "At")}
-                      date={ticket[field]}
+                      date={formatToIST(ticket[field])}
                     />
                   )
                 )}
@@ -496,15 +488,11 @@ const Section = ({ title, children }) => (
 );
 const CommentItem = ({ comment }) => (
   <div className="p-4 bg-white rounded-lg border-l-4 border-blue-300 print:border-none print:bg-transparent print:p-0 print:mb-2">
-    {" "}
     <div className="flex justify-between text-sm">
-      {" "}
-      <p className="font-bold text-blue-800">{comment.author_username}</p>{" "}
-      <p className="text-gray-500">
-        {new Date(comment.created_at).toLocaleString()}
-      </p>{" "}
-    </div>{" "}
-    <p className="mt-2 text-gray-800">{comment.text}</p>{" "}
+      <p className="font-bold text-blue-800">{comment.author_username}</p>
+      <p className="text-gray-500">{formatToIST(comment.created_at)}</p>
+    </div>
+    <p className="mt-2 text-gray-800">{comment.text}</p>
   </div>
 );
 const TimestampItem = ({ label, date }) =>
@@ -512,9 +500,7 @@ const TimestampItem = ({ label, date }) =>
     <div className="flex justify-between items-center text-sm">
       {" "}
       <p className="text-gray-600">{label}:</p>{" "}
-      <p className="font-semibold text-gray-800">
-        {new Date(date).toLocaleString()}
-      </p>{" "}
+      <p className="font-semibold text-gray-800">{date}</p>{" "}
     </div>
   ) : null;
 const EditableTimestampItem = ({ label, selected, onChange }) => (

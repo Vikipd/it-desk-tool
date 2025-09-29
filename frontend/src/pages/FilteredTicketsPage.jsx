@@ -1,49 +1,40 @@
-// COPY AND PASTE THIS ENTIRE BLOCK. THIS IS THE FINAL AND CORRECTED VERSION.
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE WARNING IS GONE.
 
 import React, { useEffect, useState, useCallback } from "react";
 import api from "../api.js";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-hot-toast";
-import { ArrowLeft, LogOut, Download, Search } from "lucide-react";
+import { Search, LayoutDashboard } from "lucide-react";
 import Select from "react-select";
 import { useAuth } from "../hooks/useAuth.js";
-// --- MODIFICATION: We need both useMutation and useQuery from React Query ---
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import DashboardLayout from "../layouts/DashboardLayout.jsx";
 
 function useQueryParams() {
   return new URLSearchParams(useLocation().search);
 }
 
-// The AssigneeDropdown component is now perfect and handles its own logic.
 const AssigneeDropdown = ({ ticket, technicians }) => {
   const queryClient = useQueryClient();
   const technicianOptions = technicians.map((tech) => ({
     value: tech.id,
     label: tech.username,
   }));
-
   const assignMutation = useMutation({
-    mutationFn: (assigneeId) => {
-      return api.patch(`/api/tickets/${ticket.id}/`, {
-        assigned_to: assigneeId,
-      });
-    },
+    mutationFn: (assigneeId) =>
+      api.patch(`/api/tickets/${ticket.id}/`, { assigned_to: assigneeId }),
     onSuccess: () => {
       toast.success(`Ticket ${ticket.ticket_id} has been assigned!`);
-      // This refetches the data, which updates the UI to show the static text.
       queryClient.invalidateQueries({ queryKey: ["filteredTickets"] });
     },
     onError: () => {
       toast.error("Failed to assign ticket.");
     },
   });
-
   const handleAssign = (selectedOption) => {
     assignMutation.mutate(selectedOption ? selectedOption.value : null);
   };
-
   return (
-    // This div stops the click from navigating away.
     <div onClick={(e) => e.stopPropagation()}>
       <Select
         options={technicianOptions}
@@ -59,7 +50,10 @@ const AssigneeDropdown = ({ ticket, technicians }) => {
 
 const statusDropdownOptions = [
   { value: "OPEN", label: "Open" },
-  { value: "IN_PROGRESS", label: "In Progress" },
+  {
+    value: "IN_PROGRESS,IN_TRANSIT,UNDER_REPAIR,ON_HOLD",
+    label: "In Progress",
+  },
   { value: "RESOLVED", label: "Resolved" },
   { value: "CLOSED", label: "Closed" },
 ];
@@ -72,10 +66,10 @@ const priorityDropdownOptions = [
 
 const FilteredTicketsPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { role } = useAuth();
   const urlQuery = useQueryParams();
 
-  // State for filters is still managed by useState
   const [statusFilter, setStatusFilter] = useState(
     urlQuery.get("status") || ""
   );
@@ -85,11 +79,9 @@ const FilteredTicketsPage = () => {
   const [searchFilter, setSearchFilter] = useState(
     urlQuery.get("search") || ""
   );
-
-  // State for technicians list
   const [technicians, setTechnicians] = useState([]);
+  const [username, setUsername] = useState("");
 
-  // --- THIS IS THE CORRECTED DATA FETCHING LOGIC ---
   const fetchTickets = useCallback(async () => {
     const params = {
       status: statusFilter || undefined,
@@ -100,26 +92,32 @@ const FilteredTicketsPage = () => {
     return res.data.results || res.data;
   }, [statusFilter, priorityFilter, searchFilter]);
 
-  // We use the `useQuery` hook to fetch and cache the ticket data.
   const { data: tickets = [], isLoading } = useQuery({
-    // The queryKey is important. It includes the filters so that
-    // if a filter changes, React Query knows to refetch the data.
     queryKey: ["filteredTickets", statusFilter, priorityFilter, searchFilter],
     queryFn: fetchTickets,
   });
 
   useEffect(() => {
-    const fetchTechnicians = async () => {
-      if (role === "ADMIN") {
-        try {
-          const response = await api.get("/api/technicians/");
-          setTechnicians(response.data);
-        } catch (err) {
-          toast.error("Could not load technician list.");
+    const params = new URLSearchParams(location.search);
+    setStatusFilter(params.get("status") || "");
+    setPriorityFilter(params.get("priority") || "");
+    setSearchFilter(params.get("search") || "");
+  }, [location.search]);
+
+  useEffect(() => {
+    const fetchRequiredData = async () => {
+      try {
+        const profileRes = await api.get("/api/auth/me/");
+        setUsername(profileRes.data.username);
+        if (role === "ADMIN") {
+          const techResponse = await api.get("/api/technicians/");
+          setTechnicians(techResponse.data);
         }
+      } catch (err) {
+        toast.error("Could not load required page data.");
       }
     };
-    fetchTechnicians();
+    fetchRequiredData();
   }, [role]);
 
   const handleExport = () => {
@@ -165,45 +163,50 @@ const FilteredTicketsPage = () => {
     document.body.removeChild(link);
   };
 
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate("/login");
+  const handleFilterChange = (key, value) => {
+    const params = new URLSearchParams(location.search);
+    if (value) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
+    navigate(`?${params.toString()}`, { replace: true });
   };
 
+  const headerActions = (
+    <>
+      {(role === "ADMIN" || role === "OBSERVER") && (
+        <button
+          onClick={() => navigate("/admin-dashboard")}
+          className="flex items-center font-semibold bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 shadow-sm text-sm"
+        >
+          <LayoutDashboard size={16} className="mr-2" /> Back to Dashboard
+        </button>
+      )}
+    </>
+  );
+
   return (
-    <div className="container mx-auto p-6 bg-gray-50 min-h-screen font-sans">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Filtered Tickets</h1>
-        <div className="flex space-x-4 items-center">
-          <Link
-            to="/admin-dashboard"
-            className="flex items-center px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-medium text-sm"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" /> Back
-          </Link>
-          <button
-            onClick={handleExport}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium text-sm"
-          >
-            <Download className="h-4 w-4 mr-2" /> Export
-          </button>
-          <button
-            onClick={handleLogout}
-            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-medium text-sm"
-          >
-            <LogOut className="h-4 w-4 mr-2" /> Logout
-          </button>
-        </div>
-      </div>
-      <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <DashboardLayout
+      pageTitle="Filtered Tickets"
+      username={username}
+      onExport={handleExport}
+      showExportButton={true}
+      headerActions={headerActions}
+    >
+      <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
           <div className="md:col-span-1 relative">
             <input
               type="text"
               placeholder="Search by Ticket ID, Node, Status, Priority..."
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg"
+              onBlur={() => handleFilterChange("search", searchFilter)}
+              onKeyPress={(e) =>
+                e.key === "Enter" && handleFilterChange("search", searchFilter)
+              }
+              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
             />
             <Search
               size={20}
@@ -215,16 +218,20 @@ const FilteredTicketsPage = () => {
             value={statusDropdownOptions.find(
               (opt) => opt.value === statusFilter
             )}
-            onChange={(opt) => setStatusFilter(opt?.value || "")}
+            onChange={(option) =>
+              handleFilterChange("status", option ? option.value : "")
+            }
             isClearable={true}
-            placeholder="Select Status"
+            placeholder="Select Status..."
           />
           <Select
             options={priorityDropdownOptions}
             value={priorityDropdownOptions.find(
               (opt) => opt.value === priorityFilter
             )}
-            onChange={(opt) => setPriorityFilter(opt?.value || "")}
+            onChange={(option) =>
+              handleFilterChange("priority", option ? option.value : "")
+            }
             isClearable={true}
             placeholder="Select Priority"
           />
@@ -232,33 +239,33 @@ const FilteredTicketsPage = () => {
       </div>
       <div className="overflow-x-auto bg-white rounded-lg shadow-md">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-100">
+          <thead className="bg-slate-100">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 S.No
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Ticket ID
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Node Name
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Card Type
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Priority
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Zone
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Assign To
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Created At
               </th>
             </tr>
@@ -266,34 +273,39 @@ const FilteredTicketsPage = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan="9" className="text-center py-10">
-                  Loading...
+                <td colSpan="9" className="text-center py-10 text-gray-500">
+                  Loading tickets...
                 </td>
               </tr>
             ) : (
               tickets.map((ticket, index) => (
                 <tr
                   key={ticket.id}
-                  className="hover:bg-gray-50 cursor-pointer"
+                  className="hover:bg-slate-50 cursor-pointer"
                   onClick={() => navigate(`/tickets/${ticket.id}`)}
                 >
-                  <td className="px-6 py-4 text-sm">{index + 1}</td>
-                  <td className="px-6 py-4 text-sm font-semibold text-blue-600">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {index + 1}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 hover:underline">
                     {ticket.ticket_id}
                   </td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.card?.node_name || "N/A"}
                   </td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.card?.card_type || "N/A"}
                   </td>
-                  <td className="px-6 py-4 text-sm">{ticket.status}</td>
-                  <td className="px-6 py-4 text-sm">{ticket.priority}</td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                    {ticket.status}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                    {ticket.priority}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.card?.zone || "N/A"}
                   </td>
-                  <td className="px-6 py-4 text-sm">
-                    {/* --- THIS IS THE FINAL, CORRECT LOGIC --- */}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.assigned_to_username ? (
                       <span className="font-medium">
                         {ticket.assigned_to_username}
@@ -305,7 +317,7 @@ const FilteredTicketsPage = () => {
                       />
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {new Date(ticket.created_at).toLocaleString()}
                   </td>
                 </tr>
@@ -314,8 +326,7 @@ const FilteredTicketsPage = () => {
           </tbody>
         </table>
       </div>
-    </div>
+    </DashboardLayout>
   );
 };
-
 export default FilteredTicketsPage;

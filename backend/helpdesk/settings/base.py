@@ -1,15 +1,18 @@
-# --- FIX: load_dotenv() is now at the top of the file. ---
-from dotenv import load_dotenv
-load_dotenv()
-
 from pathlib import Path
 import os
 import dj_database_url
 from datetime import timedelta
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # This path points to the 'backend' folder
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# --- THE FINAL FIX ---
+# We now provide the absolute path to the .env.prod file.
+# This makes it impossible for the application to load the wrong file.
+dotenv_path = os.path.join(BASE_DIR, '.env.prod')
+load_dotenv(dotenv_path=dotenv_path)
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -104,7 +107,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'helpdesk.wsgi.application'
 
-# Database configuration using dj_database_url - this reads the DATABASE_URL from our .env file
 DATABASES = {
     'default': dj_database_url.config(conn_max_age=600)
 }
@@ -122,15 +124,11 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
-# This is used in production for the 'collectstatic' command
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles') 
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Read CORS origins from environment and split by comma
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
 
 CORS_ALLOW_CREDENTIALS = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# --- FIX: The temporary debugging logger has been removed. ---

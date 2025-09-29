@@ -9,11 +9,13 @@ Group=www-data
 WorkingDirectory=/home/viki/it-desk-tool/backend
 
 # --- THE FINAL FIX ---
-# This line explicitly tells the service which settings file to use.
-# This removes all doubt and forces the production configuration.
-Environment="DJANGO_SETTINGS_MODULE=helpdesk.settings.production"
-
-ExecStart=/home/viki/it-desk-tool/backend/venv/bin/gunicorn --workers 3 --bind unix:/run/gunicorn.sock helpdesk.wsgi:application
+# We now force the production settings directly into the command using the --env flag.
+# This makes it impossible for the service to use the wrong settings.
+ExecStart=/home/viki/it-desk-tool/backend/venv/bin/gunicorn \
+          --env DJANGO_SETTINGS_MODULE=helpdesk.settings.production \
+          --workers 3 \
+          --bind unix:/run/gunicorn.sock \
+          helpdesk.wsgi:application
 
 [Install]
 WantedBy=multi-user.target

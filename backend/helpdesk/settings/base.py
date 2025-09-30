@@ -4,15 +4,14 @@ import dj_database_url
 from datetime import timedelta
 from dotenv import load_dotenv
 
+# --- FINAL FIX ---
+# This simple command now correctly loads the right .env file
+# depending on where it is run (local or production).
+load_dotenv()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # This path points to the 'backend' folder
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
-# --- THE FINAL FIX ---
-# We now provide the absolute path to the .env.prod file.
-# This makes it impossible for the application to load the wrong file.
-dotenv_path = os.path.join(BASE_DIR, '.env.prod')
-load_dotenv(dotenv_path=dotenv_path)
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY')

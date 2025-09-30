@@ -97,7 +97,7 @@ class TicketDetailSerializer(serializers.ModelSerializer):
             'id', 'ticket_id', 'created_by_username', 'assigned_to', 'assigned_to_username', 'card', 'comments',
             'fault_description', 'priority', 'attachment', 'other_card_type_description',
             'status', 'created_at', 'updated_at', 'assigned_at', 'in_progress_at', 'in_transit_at', 
-            'under_repair_at', 'on_hold_at', 'resolved_at', 'closed_at'
+            'under_repair_at', 'on_hold_at', 'resolved_at', 'closed_at', 'sla_days'
         ]
         read_only_fields = ['ticket_id', 'created_at', 'updated_at']
 

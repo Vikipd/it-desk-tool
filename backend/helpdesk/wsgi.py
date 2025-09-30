@@ -1,12 +1,10 @@
-# COPY AND PASTE THIS ENTIRE BLOCK INTO: backend/helpdesk/wsgi.py
+# E:\it-admin-tool\backend\helpdesk\wsgi.py
 
 import os
 from django.core.wsgi import get_wsgi_application
 
-# --- MODIFICATION START ---
-# We configure this file to specifically use the production settings.
-# Our live server configuration will point to this file.
+# --- FINAL FIX ---
+# This correctly points to the production settings for the live server.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'helpdesk.settings.production')
-# --- MODIFICATION END ---
 
 application = get_wsgi_application()

@@ -3,8 +3,8 @@ from django.conf import settings
 from django.utils import timezone
 from accounts.models import User
 
-# --- NEW MODEL: To store all the data from your Excel file ---
 class Card(models.Model):
+    # ... (This model is unchanged)
     zone = models.CharField(max_length=100)
     state = models.CharField(max_length=100)
     node_type = models.CharField(max_length=100)
@@ -21,11 +21,9 @@ class Card(models.Model):
     def __str__(self):
         return f"{self.node_name} - {self.serial_number}"
 
-# Helper function for file uploads
 def ticket_image_upload_path(instance, filename):
     return f"tickets/{instance.ticket_id}/{filename}"
 
-# --- HEAVILY MODIFIED TICKET MODEL ---
 class Ticket(models.Model):
     STATUS_CHOICES = [
         ('OPEN', 'Open'), 
@@ -34,54 +32,57 @@ class Ticket(models.Model):
         ('UNDER_REPAIR', 'Under Repair'), 
         ('RESOLVED', 'Resolved'), 
         ('CLOSED', 'Closed'),
-        ('ON_HOLD', 'On Hold'), # Added for Engineer's "Other" option
+        ('ON_HOLD', 'On Hold'),
     ]
     PRIORITY_CHOICES = [('CRITICAL', 'Critical'), ('HIGH', 'High'), ('MEDIUM', 'Medium'), ('LOW', 'Low')]
 
-    # --- Core Ticket Information ---
+    # ... (Core fields are unchanged)
     ticket_id = models.CharField(max_length=20, unique=True, editable=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='submitted_tickets')
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets', limit_choices_to={'role': User.TECHNICIAN})
-    
-    # --- Link to the card data ---
     card = models.ForeignKey(Card, on_delete=models.PROTECT, related_name='tickets', null=True)
-    
-    # --- User-provided details ---
     fault_description = models.TextField()
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='LOW')
     attachment = models.FileField(upload_to=ticket_image_upload_path, blank=True, null=True)
     other_card_type_description = models.CharField(max_length=100, blank=True, null=True)
-
-    # --- Status and Timestamps ---
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
     created_at = models.DateTimeField(default=timezone.now, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
-    
-    # Engineer Timestamps
     assigned_at = models.DateTimeField(null=True, blank=True)
     in_progress_at = models.DateTimeField(null=True, blank=True)
     in_transit_at = models.DateTimeField(null=True, blank=True)
     under_repair_at = models.DateTimeField(null=True, blank=True)
     on_hold_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
-    
-    # Admin Timestamp
     closed_at = models.DateTimeField(null=True, blank=True)
 
+    # --- FINAL FIX FOR SLA DAYS ---
+    # This property calculates the SLA target based on priority.
+    # This is the single source of truth for your business logic.
+    @property
+    def sla_days(self):
+        if self.priority == 'CRITICAL':
+            return 3
+        elif self.priority == 'HIGH':
+            return 7
+        elif self.priority == 'MEDIUM':
+            return 14
+        elif self.priority == 'LOW':
+            return 21
+        return 30 # Default fallback
+
     def save(self, *args, **kwargs):
-        # Generate Ticket ID on first save
         if not self.pk:
-            super().save(*args, **kwargs) # Save to get a PK
+            super().save(*args, **kwargs)
             self.ticket_id = f"TKT-{self.created_at.year}-{self.id:005d}"
-            kwargs['force_insert'] = False # Ensure we update not insert again
-        
+            kwargs['force_insert'] = False
         super(Ticket, self).save(*args, **kwargs)
 
     def __str__(self):
         return self.ticket_id
 
-# --- Comment Model (Unchanged) ---
 class Comment(models.Model):
+    # ... (This model is unchanged)
     text = models.TextField()
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='comments')

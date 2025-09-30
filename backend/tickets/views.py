@@ -3,7 +3,6 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-# --- FINAL FIX: IMPORT Case and When for ordering ---
 from django.db.models import Count, Avg, F, ExpressionWrapper, DurationField, Q, Case, When, IntegerField
 from .models import Ticket, Comment, Card
 from .serializers import (
@@ -16,9 +15,6 @@ from .serializers import (
 from .filters import TicketFilter
 from accounts.models import User
 from accounts.permissions import IsTechnicianRole
-
-# ... (All the ListView, CardAutofillView, and FilteredCardDataView classes are unchanged) ...
-# ... (Leaving them out here for brevity, but they must remain in your file) ...
 
 class ZoneListView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -96,9 +92,7 @@ class FilteredCardDataView(views.APIView):
         values = Card.objects.filter(**active_filters).values_list(field_name, flat=True).distinct().order_by(field_name)
         return Response(values)
 
-
 class TicketViewSet(viewsets.ModelViewSet):
-    # ... (This class definition and its methods get_queryset, get_serializer_class, etc., are unchanged) ...
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = TicketFilter
@@ -133,14 +127,13 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'], url_path='edit-timestamps', permission_classes=[permissions.IsAdminUser])
     def edit_timestamps(self, request, pk=None):
         ticket = self.get_object()
-        serializer = self.get_serializer(ticket, data=request.data, partial=Trie)
+        serializer = self.get_serializer(ticket, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         for field, value in serializer.validated_data.items():
             if field.endswith('_at'):
                 setattr(ticket, field, value)
         ticket.save()
         return Response(self.get_serializer(ticket).data)
-
 
     @action(detail=False, methods=['get'], url_path='dashboard-stats')
     def dashboard_stats(self, request):
@@ -166,28 +159,27 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         sla_targets = { 'CRITICAL': 3, 'HIGH': 7, 'MEDIUM': 14, 'LOW': 21 }
         
-        # --- FINAL FIX FOR CARD ORDERING ---
-        # We create a custom ordering field in the database query.
-        priority_order = Case(
-            When(priority='CRITICAL', then=0),
-            When(priority='HIGH', then=1),
-            When(priority='MEDIUM', then=2),
-            When(priority='LOW', then=3),
-            default=4,
-            output_field=IntegerField(),
-        )
-        # We then use this new field to order the results.
-        by_priority_counts = base_queryset.values('priority').annotate(count=Count('id'), priority_order=priority_order).order_by('priority_order')
+        # --- THE FINAL FIX FOR THE MISSING CARD ---
+        # 1. Define all possible priorities
+        all_priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
+        
+        # 2. Get the counts for priorities that actually exist in the database
+        by_priority_counts_qs = base_queryset.values('priority').annotate(count=Count('id'))
+        priority_counts_dict = {item['priority']: item['count'] for item in by_priority_counts_qs}
 
-        by_priority_combined = [
-            {
-                'priority': item['priority'],
-                'count': item['count'],
-                'avg_resolution_days': sla_dict.get(item['priority'], 0),
-                'sla_target_days': sla_targets.get(item['priority'], 30)
-            }
-            for item in by_priority_counts
-        ]
+        # 3. Build the final list, ensuring all priorities are included
+        by_priority_combined = []
+        for priority in all_priorities:
+            by_priority_combined.append({
+                'priority': priority,
+                'count': priority_counts_dict.get(priority, 0), # Default to 0 if not found
+                'avg_resolution_days': sla_dict.get(priority, 0),
+                'sla_target_days': sla_targets.get(priority, 30)
+            })
+
+        # This ensures the final list is always in the correct order for the frontend
+        order_map = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3}
+        by_priority_combined.sort(key=lambda x: order_map.get(x['priority'], 4))
         
         by_status_counts = base_queryset.values('status').annotate(count=Count('id')).order_by('status')
         by_category_counts = base_queryset.values('card__card_type').annotate(count=Count('id')).order_by('-count')
@@ -196,7 +188,8 @@ class TicketViewSet(viewsets.ModelViewSet):
         response_data.update({
             'total_tickets': status_counts['total_tickets'], 'open_tickets': status_counts['open_tickets'], 'in_progress_tickets': status_counts['in_progress_tickets'],
             'resolved_tickets': status_counts['resolved_tickets'], 'closed_tickets': status_counts['closed_tickets'], 'by_status': list(by_status_counts),
-            'by_priority': by_priority_combined, 'by_category': by_category_renamed,
+            'by_priority': by_priority_combined, # Use our new, complete list
+            'by_category': by_category_renamed,
         })
         return Response(response_data)
 
@@ -210,13 +203,12 @@ class TicketViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class CommentViewSet(viewsets.ModelViewSet):
-    # ... (This class is unchanged) ...
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticated]
     def get_queryset(self):
         return Comment.objects.filter(ticket_id=self.kwargs.get('ticket_pk'))
-    def perform__create(self, serializer):
+    def perform_create(self, serializer):
         ticket_id = self.kwargs.get('ticket_pk')
         try:
             ticket = Ticket.objects.get(pk=ticket_id)

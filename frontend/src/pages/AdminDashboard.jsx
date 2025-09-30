@@ -1,5 +1,3 @@
-// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE BUG IS FIXED.
-
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -81,8 +79,6 @@ const DashboardCard = ({
   return cardContent;
 };
 
-// --- FIX #1 ---
-// This component now correctly receives all the data it needs via props.
 const SlaPerformanceCard = ({ priority, targetDays, actualDays }) => {
   const isBreached = parseFloat(actualDays) > targetDays;
   const performancePercentage =
@@ -133,7 +129,6 @@ const SlaPerformanceCard = ({ priority, targetDays, actualDays }) => {
     </div>
   );
 };
-
 
 const COLORS = [
   "#0088FE",
@@ -195,7 +190,6 @@ const AdminDashboard = () => {
     const { name } = data.payload;
     if (!name || name === "N/A") return;
     let queryParam = "";
-    // --- MODIFICATION: IF THE STATUS IS ONE OF THE "IN PROGRESS" TYPES, COMBINE THEM ---
     const inProgressStatuses = [
       "IN_PROGRESS",
       "IN_TRANSIT",
@@ -229,10 +223,7 @@ const AdminDashboard = () => {
     );
 
   const { summary = {}, username = "" } = data || {};
-  
-  // --- FIX #2 ---
-  // The hardcoded `slaTargets` object has been REMOVED.
-  
+
   const headerActions = (
     <>
       <button
@@ -278,13 +269,17 @@ const AdminDashboard = () => {
           icon={<AlertTriangle size={24} />}
           to="/filtered-tickets?status=OPEN"
         />
-        {/* --- MODIFICATION: THIS IS THE CORRECT LINK FOR THE "IN PROGRESS" CARD --- */}
+
+        {/* --- THIS IS THE FIX --- */}
+        {/* The 'to' prop now includes all "in progress" statuses, separated by commas. */}
+        {/* This will make the link on the card work correctly. */}
         <DashboardCard
           title="In Progress"
           value={summary.in_progress_tickets || 0}
           icon={<Clock size={24} />}
           to="/filtered-tickets?status=IN_PROGRESS,IN_TRANSIT,UNDER_REPAIR,ON_HOLD"
         />
+
         <DashboardCard
           title="Resolved Tickets"
           value={summary.resolved_tickets || 0}
@@ -311,9 +306,6 @@ const AdminDashboard = () => {
           <Clock className="mr-3 text-gray-400" /> SLA Performance Overview
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* --- FIX #3 --- */}
-          {/* We now map over the `by_priority` array from the API. */}
-          {/* This uses the `sla_target_days` and `avg_resolution_days` sent by the backend. */}
           {(summary.by_priority || []).map((priorityData) => (
             <SlaPerformanceCard
               key={priorityData.priority}
@@ -391,7 +383,7 @@ const AdminDashboard = () => {
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-lg">
+        <div className="bg-.white p-6 rounded-xl shadow-lg">
           <h3 className="text-lg font-semibold mb-4">Tickets by Category</h3>
           <div style={{ width: "100%", height: 250 }}>
             <ResponsiveContainer>

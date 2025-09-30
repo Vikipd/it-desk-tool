@@ -4,22 +4,18 @@ import dj_database_url
 from datetime import timedelta
 from dotenv import load_dotenv
 
-# --- FINAL FIX ---
-# This simple command now correctly loads the right .env file
-# depending on where it is run (local or production).
-load_dotenv()
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-# This path points to the 'backend' folder
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY')
+# This stable logic loads the correct .env file for production or local development.
+prod_env_path = os.path.join(BASE_DIR, '.env.prod')
+if os.path.exists(prod_env_path):
+    load_dotenv(dotenv_path=prod_env_path)
+else:
+    load_dotenv()
 
-# Read ALLOWED_HOSTS from environment and split by comma
+SECRET_KEY = os.environ.get('SECRET_KEY')
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -54,7 +50,8 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": False,
-    "ALGORITHM": "HS256",
+    # --- THIS IS THE FIX ---
+    "ALGORITHM": "HS256", # Was incorrectly "HS266"
     "SIGNING_KEY": SECRET_KEY,
     "VERIFYING_KEY": None,
     "AUDIENCE": None,

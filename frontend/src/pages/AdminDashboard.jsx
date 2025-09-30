@@ -81,12 +81,9 @@ const DashboardCard = ({
   return cardContent;
 };
 
-const SlaPerformanceCard = ({ priority, targetDays, summary }) => {
-  const byPriority = summary.by_priority || [];
-  const priorityData = byPriority.find((p) => p.priority === priority);
-  const actualDays = priorityData
-    ? parseFloat(priorityData.avg_resolution_days).toFixed(1)
-    : "0.0";
+// --- FIX #1 ---
+// This component now correctly receives all the data it needs via props.
+const SlaPerformanceCard = ({ priority, targetDays, actualDays }) => {
   const isBreached = parseFloat(actualDays) > targetDays;
   const performancePercentage =
     actualDays > 0
@@ -113,7 +110,7 @@ const SlaPerformanceCard = ({ priority, targetDays, summary }) => {
         <div className="flex justify-between items-baseline mb-1">
           <span className="text-gray-500 text-sm">Actual Avg:</span>
           <span className="font-bold text-2xl text-gray-800">
-            {actualDays} Days
+            {parseFloat(actualDays).toFixed(1)} Days
           </span>
         </div>
         <div className="flex justify-between items-baseline">
@@ -136,6 +133,7 @@ const SlaPerformanceCard = ({ priority, targetDays, summary }) => {
     </div>
   );
 };
+
 
 const COLORS = [
   "#0088FE",
@@ -231,7 +229,10 @@ const AdminDashboard = () => {
     );
 
   const { summary = {}, username = "" } = data || {};
-  const slaTargets = { CRITICAL: 10, HIGH: 20, MEDIUM: 30, LOW: 40 };
+  
+  // --- FIX #2 ---
+  // The hardcoded `slaTargets` object has been REMOVED.
+  
   const headerActions = (
     <>
       <button
@@ -310,12 +311,15 @@ const AdminDashboard = () => {
           <Clock className="mr-3 text-gray-400" /> SLA Performance Overview
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {Object.entries(slaTargets).map(([priority, days]) => (
+          {/* --- FIX #3 --- */}
+          {/* We now map over the `by_priority` array from the API. */}
+          {/* This uses the `sla_target_days` and `avg_resolution_days` sent by the backend. */}
+          {(summary.by_priority || []).map((priorityData) => (
             <SlaPerformanceCard
-              key={priority}
-              priority={priority}
-              targetDays={days}
-              summary={summary}
+              key={priorityData.priority}
+              priority={priorityData.priority}
+              targetDays={priorityData.sla_target_days}
+              actualDays={priorityData.avg_resolution_days}
             />
           ))}
         </div>

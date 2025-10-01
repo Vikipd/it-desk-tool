@@ -1,10 +1,13 @@
-// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE WARNING IS GONE.
-
 import React, { useEffect, useState, useCallback } from "react";
 import api from "../api.js";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-hot-toast";
-import { Search, LayoutDashboard } from "lucide-react";
+import {
+  Search,
+  LayoutDashboard,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import Select from "react-select";
 import { useAuth } from "../hooks/useAuth.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -70,6 +73,9 @@ const FilteredTicketsPage = () => {
   const { role } = useAuth();
   const urlQuery = useQueryParams();
 
+  const [currentPage, setCurrentPage] = useState(
+    parseInt(urlQuery.get("page")) || 1
+  );
   const [statusFilter, setStatusFilter] = useState(
     urlQuery.get("status") || ""
   );
@@ -82,26 +88,42 @@ const FilteredTicketsPage = () => {
   const [technicians, setTechnicians] = useState([]);
   const [username, setUsername] = useState("");
 
-  const fetchTickets = useCallback(async () => {
-    const params = {
-      status: statusFilter || undefined,
-      priority: priorityFilter || undefined,
-      search: searchFilter || undefined,
-    };
-    const res = await api.get("/api/tickets/", { params });
-    return res.data.results || res.data;
-  }, [statusFilter, priorityFilter, searchFilter]);
+  const fetchTickets = useCallback(
+    async (page) => {
+      const params = {
+        page: page,
+        status: statusFilter || undefined,
+        priority: priorityFilter || undefined,
+        search: searchFilter || undefined,
+      };
+      const res = await api.get("/api/tickets/", { params });
+      return res.data;
+    },
+    [statusFilter, priorityFilter, searchFilter]
+  );
 
-  const { data: tickets = [], isLoading } = useQuery({
-    queryKey: ["filteredTickets", statusFilter, priorityFilter, searchFilter],
-    queryFn: fetchTickets,
+  const { data: paginatedData, isLoading } = useQuery({
+    queryKey: [
+      "filteredTickets",
+      currentPage,
+      statusFilter,
+      priorityFilter,
+      searchFilter,
+    ],
+    queryFn: () => fetchTickets(currentPage),
   });
+
+  const tickets = paginatedData?.results || [];
+  const totalCount = paginatedData?.count || 0;
+  const hasNextPage = paginatedData?.next !== null;
+  const hasPreviousPage = paginatedData?.previous !== null;
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     setStatusFilter(params.get("status") || "");
     setPriorityFilter(params.get("priority") || "");
     setSearchFilter(params.get("search") || "");
+    setCurrentPage(parseInt(params.get("page")) || 1);
   }, [location.search]);
 
   useEffect(() => {
@@ -120,48 +142,90 @@ const FilteredTicketsPage = () => {
     fetchRequiredData();
   }, [role]);
 
-  const handleExport = () => {
-    if (!tickets || tickets.length === 0) {
-      toast.error("No tickets to export.");
-      return;
-    }
-    toast.success("Generating CSV...");
-    const headers = [
-      "S.No",
-      "Ticket ID",
-      "Node Name",
-      "Card Type",
-      "Status",
-      "Priority",
-      "Zone",
-      "Assigned To",
-      "Created At",
-    ];
-    const rows = tickets.map((ticket, index) =>
-      [
-        index + 1,
-        `"${ticket.ticket_id}"`,
-        `"${ticket.card?.node_name || ""}"`,
-        `"${
-          ticket.card?.card_type || ticket.other_card_type_description || ""
-        }"`,
-        `"${ticket.status}"`,
-        `"${ticket.priority}"`,
-        `"${ticket.card?.zone || ""}"`,
-        `"${ticket.assigned_to_username || "Unassigned"}"`,
-        `"${new Date(ticket.created_at).toLocaleString()}"`,
-      ].join(",")
-    );
-    const csvContent = [headers.join(","), ...rows].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "filtered_tickets.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const exportMutation = useMutation({
+    mutationFn: () => {
+      const params = {
+        status: statusFilter || undefined,
+        priority: priorityFilter || undefined,
+        search: searchFilter || undefined,
+      };
+      return api.get("/api/tickets/export-all/", { params });
+    },
+    onSuccess: (response) => {
+      const allTickets = response.data;
+      if (!allTickets || allTickets.length === 0) {
+        toast.error("No tickets found with the current filters to export.");
+        return;
+      }
+
+      const date = new Date();
+      const timestamp = `${date.getFullYear()}-${(date.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}_${date
+        .getHours()
+        .toString()
+        .padStart(2, "0")}-${date.getMinutes().toString().padStart(2, "0")}`;
+      const defaultFilename = `tickets_export_${timestamp}.csv`;
+
+      const filename = prompt(
+        "Please enter a filename for your export:",
+        defaultFilename
+      );
+      if (filename === null) {
+        toast.error("Export cancelled.");
+        return;
+      }
+
+      toast.success("Generating CSV for all matching tickets...");
+      const headers = [
+        "S.No",
+        "Ticket ID",
+        "Node Name",
+        "Card Type",
+        "Status",
+        "Priority",
+        "Zone",
+        "Created By",
+        "Assigned To",
+        "Created At",
+        "Closed At",
+      ];
+      const rows = allTickets.map((ticket, index) =>
+        [
+          index + 1,
+          `"${ticket.ticket_id}"`,
+          `"${ticket.card?.node_name || ""}"`,
+          `"${
+            ticket.card?.card_type || ticket.other_card_type_description || ""
+          }"`,
+          `"${ticket.status}"`,
+          `"${ticket.priority}"`,
+          `"${ticket.card?.zone || ""}"`,
+          `"${ticket.created_by_username || ""}"`,
+          `"${ticket.assigned_to_username || "Unassigned"}"`,
+          `"${new Date(ticket.created_at).toLocaleString()}"`,
+          `"${
+            ticket.closed_at ? new Date(ticket.closed_at).toLocaleString() : ""
+          }"`,
+        ].join(",")
+      );
+      const csvContent = [headers.join(","), ...rows].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        filename.endsWith(".csv") ? filename : `${filename}.csv`
+      );
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    },
+    onError: () => {
+      toast.error("Failed to fetch data for export.");
+    },
+  });
 
   const handleFilterChange = (key, value) => {
     const params = new URLSearchParams(location.search);
@@ -170,7 +234,14 @@ const FilteredTicketsPage = () => {
     } else {
       params.delete(key);
     }
+    params.delete("page");
     navigate(`?${params.toString()}`, { replace: true });
+  };
+
+  const handlePageChange = (newPage) => {
+    const params = new URLSearchParams(location.search);
+    params.set("page", newPage);
+    navigate(`?${params.toString()}`);
   };
 
   const headerActions = (
@@ -190,7 +261,7 @@ const FilteredTicketsPage = () => {
     <DashboardLayout
       pageTitle="Filtered Tickets"
       username={username}
-      onExport={handleExport}
+      onExport={() => exportMutation.mutate()}
       showExportButton={true}
       headerActions={headerActions}
     >
@@ -262,19 +333,33 @@ const FilteredTicketsPage = () => {
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Zone
               </th>
+              {(role === "ADMIN" || role === "OBSERVER") && (
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Created By
+                </th>
+              )}
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                Assign To
+                Assigned To
               </th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Created At
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Closed At
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan="9" className="text-center py-10 text-gray-500">
+                <td colSpan="12" className="text-center py-10 text-gray-500">
                   Loading tickets...
+                </td>
+              </tr>
+            ) : tickets.length === 0 ? (
+              <tr>
+                <td colSpan="12" className="text-center py-10 text-gray-500">
+                  No tickets found.
                 </td>
               </tr>
             ) : (
@@ -285,7 +370,7 @@ const FilteredTicketsPage = () => {
                   onClick={() => navigate(`/tickets/${ticket.id}`)}
                 >
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {index + 1}
+                    {(currentPage - 1) * 10 + index + 1}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 hover:underline">
                     {ticket.ticket_id}
@@ -305,26 +390,70 @@ const FilteredTicketsPage = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.card?.zone || "N/A"}
                   </td>
+                  {(role === "ADMIN" || role === "OBSERVER") && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                      {ticket.created_by_username}
+                    </td>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.assigned_to_username ? (
                       <span className="font-medium">
                         {ticket.assigned_to_username}
                       </span>
-                    ) : (
+                    ) : role === "ADMIN" ? (
                       <AssigneeDropdown
                         ticket={ticket}
                         technicians={technicians}
                       />
+                    ) : (
+                      "Unassigned"
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {new Date(ticket.created_at).toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                    {ticket.closed_at
+                      ? new Date(ticket.closed_at).toLocaleString()
+                      : "---"}
                   </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-6 flex items-center justify-between">
+        <div className="text-sm text-gray-700">
+          Showing{" "}
+          <span className="font-medium">
+            {Math.min((currentPage - 1) * 10 + 1, totalCount)}
+          </span>{" "}
+          to{" "}
+          <span className="font-medium">
+            {Math.min(currentPage * 10, totalCount)}
+          </span>{" "}
+          of <span className="font-medium">{totalCount}</span> results
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={!hasPreviousPage || isLoading}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft size={16} />
+            Previous
+          </button>
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={!hasNextPage || isLoading}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+            <ChevronRight size={16} />
+          </button>
+        </div>
       </div>
     </DashboardLayout>
   );

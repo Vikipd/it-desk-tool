@@ -1,6 +1,4 @@
-// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE TIMESTAMPS ARE FIXED.
-
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "../hooks/useAuth.js";
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -15,6 +13,8 @@ import {
   Clock,
   Search,
   LayoutDashboard,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import api from "../api.js";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -40,101 +40,157 @@ const ClientDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { role } = useAuth();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
-  const fetchClientData = async () => {
-    const params = { search: debouncedSearchTerm || undefined };
-    const [ticketsResponse, profileResponse] = await Promise.all([
-      api.get("/api/tickets/", { params }),
-      api.get("/api/auth/me/"),
-    ]);
-    return {
-      tickets: ticketsResponse.data.results || ticketsResponse.data,
-      username: profileResponse.data.username,
-    };
-  };
+  const [activeStatusFilter, setActiveStatusFilter] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [username, setUsername] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data, error, isLoading } = useQuery({
-    queryKey: ["clientDashboard", debouncedSearchTerm],
-    queryFn: fetchClientData,
+    queryKey: ["clientDashboardData"],
+    queryFn: async () => {
+      const [profileResponse, allTicketsResponse] = await Promise.all([
+        api.get("/api/auth/me/"),
+        api.get("/api/tickets/export-all/"),
+      ]);
+      return {
+        username: profileResponse.data.username,
+        allTickets: allTicketsResponse.data,
+      };
+    },
   });
-  const { tickets = [], username = "" } = data || {};
+
+  const { username: fetchedUsername = "", allTickets = [] } = data || {};
+  useEffect(() => {
+    if (fetchedUsername) setUsername(fetchedUsername);
+  }, [fetchedUsername]);
 
   const stats = useMemo(() => {
-    if (!tickets)
+    if (!allTickets)
       return { open: 0, inProgress: 0, resolved: 0, closed: 0, total: 0 };
-    const openTickets = tickets.filter((t) => t.status === "OPEN").length;
-    const inProgressTickets = tickets.filter((t) =>
+    const openTickets = allTickets.filter((t) => t.status === "OPEN").length;
+    const inProgressTickets = allTickets.filter((t) =>
       ["IN_PROGRESS", "IN_TRANSIT", "UNDER_REPAIR", "ON_HOLD"].includes(
         t.status
       )
     ).length;
-    const resolvedTickets = tickets.filter(
+    const resolvedTickets = allTickets.filter(
       (t) => t.status === "RESOLVED"
     ).length;
-    const closedTickets = tickets.filter((t) => t.status === "CLOSED").length;
+    const closedTickets = allTickets.filter(
+      (t) => t.status === "CLOSED"
+    ).length;
     return {
       open: openTickets,
       inProgress: inProgressTickets,
       resolved: resolvedTickets,
       closed: closedTickets,
-      total: tickets.length,
+      total: allTickets.length,
     };
-  }, [tickets]);
+  }, [allTickets]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+  const filteredTickets = useMemo(() => {
+    let ticketsToFilter = allTickets;
 
-  const handleExport = () => {
-    if (!tickets || tickets.length === 0) {
-      toast.error("No tickets to export.");
-      return;
+    if (activeStatusFilter) {
+      const filterStatuses = activeStatusFilter.split(",");
+      ticketsToFilter = ticketsToFilter.filter((ticket) =>
+        filterStatuses.includes(ticket.status)
+      );
     }
-    toast.success("Generating your CSV export...");
-    const headers = [
-      "Ticket ID",
-      "Node Name",
-      "Category",
-      "Status",
-      "Priority",
-      "Created At",
-      "Closed At",
-    ];
-    // --- MODIFICATION: TIMESTAMPS ARE NOW CORRECTLY FORMATTED FOR EXPORT ---
-    const rows = tickets.map((ticket) =>
-      [
-        `"${ticket.ticket_id}"`,
-        `"${ticket.card?.node_name || "N/A"}"`,
-        `"${
-          ticket.card?.card_type || ticket.other_card_type_description || "N/A"
-        }"`,
-        `"${ticket.status}"`,
-        `"${ticket.priority}"`,
-        `"${
-          ticket.created_at
-            ? new Date(ticket.created_at).toLocaleString()
-            : "N/A"
-        }"`,
-        `"${
-          ticket.closed_at ? new Date(ticket.closed_at).toLocaleString() : "N/A"
-        }"`,
-      ].join(",")
-    );
-    const csvContent = [headers.join(","), ...rows].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "my_tickets.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+
+    if (searchTerm) {
+      const lowercasedFilter = searchTerm.toLowerCase();
+      ticketsToFilter = ticketsToFilter.filter(
+        (ticket) =>
+          Object.values(ticket).some((val) =>
+            String(val).toLowerCase().includes(lowercasedFilter)
+          ) ||
+          Object.values(ticket.card || {}).some((val) =>
+            String(val).toLowerCase().includes(lowercasedFilter)
+          )
+      );
+    }
+
+    return ticketsToFilter;
+  }, [allTickets, activeStatusFilter, searchTerm]);
+
+  const ticketsPerPage = 10;
+  const paginatedTickets = useMemo(() => {
+    const startIndex = (currentPage - 1) * ticketsPerPage;
+    return filteredTickets.slice(startIndex, startIndex + ticketsPerPage);
+  }, [filteredTickets, currentPage]);
+
+  const totalPages = Math.ceil(filteredTickets.length / ticketsPerPage);
+  const hasNextPage = currentPage < totalPages;
+  const hasPreviousPage = currentPage > 1;
+
+  const exportMutation = useMutation({
+    mutationFn: () => api.get("/api/tickets/export-all/"),
+    onSuccess: (response) => {
+      const ticketsToExport = response.data;
+      if (!ticketsToExport || ticketsToExport.length === 0) {
+        toast.error("No tickets to export.");
+        return;
+      }
+      const date = new Date();
+      const timestamp = `${date.getFullYear()}-${(date.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}_${date
+        .getHours()
+        .toString()
+        .padStart(2, "0")}-${date.getMinutes().toString().padStart(2, "0")}`;
+      const defaultFilename = `my_tickets_export_${timestamp}.csv`;
+      const filename = prompt(
+        "Please enter a filename for your export:",
+        defaultFilename
+      );
+      if (filename === null) {
+        toast.error("Export cancelled.");
+        return;
+      }
+      toast.success("Generating CSV...");
+      const headers = [
+        "Ticket ID",
+        "Node Name",
+        "Category",
+        "Status",
+        "Priority",
+        "Created At",
+        "Closed At",
+      ];
+      const rows = ticketsToExport.map((ticket) =>
+        [
+          `"${ticket.ticket_id}"`,
+          `"${ticket.card?.node_name || "N/A"}"`,
+          `"${
+            ticket.card?.card_type ||
+            ticket.other_card_type_description ||
+            "N/A"
+          }"`,
+          `"${ticket.status}"`,
+          `"${ticket.priority}"`,
+          `"${new Date(ticket.created_at).toLocaleString()}"`,
+          `"${
+            ticket.closed_at ? new Date(ticket.closed_at).toLocaleString() : ""
+          }"`,
+        ].join(",")
+      );
+      const csvContent = [headers.join(","), ...rows].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        filename.endsWith(".csv") ? filename : `${filename}.csv`
+      );
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    },
+    onError: () => toast.error("Failed to fetch data for export."),
+  });
 
   const getStatusBadgeClass = (status) => {
     switch (status) {
@@ -154,13 +210,25 @@ const ClientDashboard = () => {
     }
   };
 
+  const handlePageChange = (newPage) => {
+    if (newPage > 0 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handleCardClick = (status) => {
+    setActiveStatusFilter(status);
+    setSearchTerm(""); // Clear search term when a card is clicked
+    setCurrentPage(1);
+  };
+
   if (error)
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-slate-50 text-red-600">
         <AlertTriangle className="h-12 w-12 mb-4" />
         <p className="text-xl font-semibold">{error.message}</p>
         <button
-          onClick={() => queryClient.invalidateQueries(["clientDashboard"])}
+          onClick={() => queryClient.invalidateQueries(["clientDashboardData"])}
           className="mt-6 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition"
         >
           Try Again
@@ -194,7 +262,7 @@ const ClientDashboard = () => {
         role === "OBSERVER" ? "Client Tickets Overview" : "Client Dashboard"
       }
       username={username}
-      onExport={handleExport}
+      onExport={() => exportMutation.mutate()}
       showExportButton={true}
       headerActions={headerActions}
     >
@@ -204,14 +272,14 @@ const ClientDashboard = () => {
           value={stats.total}
           icon={<Ticket size={24} className="text-blue-600" />}
           color="bg-blue-100"
-          onClick={() => setSearchTerm("")}
+          onClick={() => handleCardClick("")}
         />
         <SummaryCard
           title="Open Tickets"
           value={stats.open}
           icon={<Clock size={24} className="text-blue-600" />}
           color="bg-blue-100"
-          onClick={() => setSearchTerm("OPEN")}
+          onClick={() => handleCardClick("OPEN")}
         />
         <SummaryCard
           title="In Progress"
@@ -219,7 +287,7 @@ const ClientDashboard = () => {
           icon={<Clock size={24} className="text-yellow-600" />}
           color="bg-yellow-100"
           onClick={() =>
-            setSearchTerm("IN_PROGRESS,IN_TRANSIT,UNDER_REPAIR,ON_HOLD")
+            handleCardClick("IN_PROGRESS,IN_TRANSIT,UNDER_REPAIR,ON_HOLD")
           }
         />
         <SummaryCard
@@ -227,14 +295,14 @@ const ClientDashboard = () => {
           value={stats.resolved}
           icon={<CheckCircle size={24} className="text-purple-600" />}
           color="bg-purple-100"
-          onClick={() => setSearchTerm("RESOLVED")}
+          onClick={() => handleCardClick("RESOLVED")}
         />
         <SummaryCard
           title="Closed Tickets"
           value={stats.closed}
           icon={<CheckCircle size={24} className="text-green-600" />}
           color="bg-green-100"
-          onClick={() => setSearchTerm("CLOSED")}
+          onClick={() => handleCardClick("CLOSED")}
         />
       </div>
       <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200/80">
@@ -262,7 +330,7 @@ const ClientDashboard = () => {
           <div className="text-center py-20 px-6">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
           </div>
-        ) : tickets.length > 0 ? (
+        ) : paginatedTickets.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full w-full">
               <thead className="bg-slate-50 border-b border-gray-200">
@@ -295,13 +363,15 @@ const ClientDashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {tickets.map((ticket, index) => (
+                {paginatedTickets.map((ticket, index) => (
                   <tr
                     key={ticket.id}
                     className="text-sm cursor-pointer hover:bg-gray-50"
                     onClick={() => navigate(`/tickets/${ticket.id}`)}
                   >
-                    <td className="py-5 px-6 text-gray-600">{index + 1}</td>
+                    <td className="py-5 px-6 text-gray-600">
+                      {(currentPage - 1) * 10 + index + 1}
+                    </td>
                     <td className="py-5 px-6 font-semibold text-blue-700">
                       {ticket.ticket_id}
                     </td>
@@ -325,16 +395,13 @@ const ClientDashboard = () => {
                     <td className="py-5 px-6 text-gray-600">
                       {ticket.priority}
                     </td>
-                    {/* --- MODIFICATION: TIMESTAMPS ARE NOW CORRECTLY FORMATTED IN THE TABLE --- */}
                     <td className="py-5 px-6 text-gray-600">
-                      {ticket.created_at
-                        ? new Date(ticket.created_at).toLocaleString()
-                        : "N/A"}
+                      {new Date(ticket.created_at).toLocaleString()}
                     </td>
                     <td className="py-5 px-6 text-gray-600">
                       {ticket.closed_at
                         ? new Date(ticket.closed_at).toLocaleString()
-                        : "N/A"}
+                        : "---"}
                     </td>
                     <td className="py-5 px-6 text-gray-400">
                       <ArrowRight size={18} />
@@ -365,8 +432,41 @@ const ClientDashboard = () => {
           </div>
         )}
       </div>
+
+      <div className="mt-6 flex items-center justify-between">
+        <div className="text-sm text-gray-700">
+          Showing{" "}
+          <span className="font-medium">
+            {Math.min(
+              (currentPage - 1) * ticketsPerPage + 1,
+              filteredTickets.length
+            )}
+          </span>{" "}
+          to{" "}
+          <span className="font-medium">
+            {Math.min(currentPage * ticketsPerPage, filteredTickets.length)}
+          </span>{" "}
+          of <span className="font-medium">{filteredTickets.length}</span>{" "}
+          results
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={!hasPreviousPage || isLoading}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft size={16} /> Previous
+          </button>
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={!hasNextPage || isLoading}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
     </DashboardLayout>
   );
 };
 export default ClientDashboard;
-  

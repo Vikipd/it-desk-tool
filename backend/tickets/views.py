@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Avg, F, ExpressionWrapper, DurationField, Q, Case, When, IntegerField
+from rest_framework.pagination import PageNumberPagination
 from .models import Ticket, Comment, Card
 from .serializers import (
     TicketDetailSerializer, 
@@ -15,6 +16,11 @@ from .serializers import (
 from .filters import TicketFilter
 from accounts.models import User
 from accounts.permissions import IsTechnicianRole
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 class ZoneListView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -96,8 +102,13 @@ class TicketViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = TicketFilter
-    search_fields = ['ticket_id', 'card__node_name', 'card__serial_number', 'card__location', 'card__state', 'card__card_type', 'card__zone', 'status', 'priority', 'assigned_to__username', 'created_by__username']
+    search_fields = [
+        'ticket_id', 'card__node_name', 'card__serial_number', 'card__location', 
+        'card__state', 'card__card_type', 'card__zone', 'status', 'priority', 
+        'assigned_to__username', 'created_by__username'
+    ]
     ordering_fields = ['created_at', 'priority']
+    pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
         user = self.request.user
@@ -135,6 +146,12 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket.save()
         return Response(self.get_serializer(ticket).data)
 
+    @action(detail=False, methods=['get'], url_path='export-all')
+    def export_all(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
     @action(detail=False, methods=['get'], url_path='dashboard-stats')
     def dashboard_stats(self, request):
         user = self.request.user
@@ -159,25 +176,19 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         sla_targets = { 'CRITICAL': 3, 'HIGH': 7, 'MEDIUM': 14, 'LOW': 21 }
         
-        # --- THE FINAL FIX FOR THE MISSING CARD ---
-        # 1. Define all possible priorities
         all_priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
-        
-        # 2. Get the counts for priorities that actually exist in the database
         by_priority_counts_qs = base_queryset.values('priority').annotate(count=Count('id'))
         priority_counts_dict = {item['priority']: item['count'] for item in by_priority_counts_qs}
 
-        # 3. Build the final list, ensuring all priorities are included
         by_priority_combined = []
         for priority in all_priorities:
             by_priority_combined.append({
                 'priority': priority,
-                'count': priority_counts_dict.get(priority, 0), # Default to 0 if not found
+                'count': priority_counts_dict.get(priority, 0),
                 'avg_resolution_days': sla_dict.get(priority, 0),
                 'sla_target_days': sla_targets.get(priority, 30)
             })
 
-        # This ensures the final list is always in the correct order for the frontend
         order_map = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3}
         by_priority_combined.sort(key=lambda x: order_map.get(x['priority'], 4))
         
@@ -188,7 +199,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         response_data.update({
             'total_tickets': status_counts['total_tickets'], 'open_tickets': status_counts['open_tickets'], 'in_progress_tickets': status_counts['in_progress_tickets'],
             'resolved_tickets': status_counts['resolved_tickets'], 'closed_tickets': status_counts['closed_tickets'], 'by_status': list(by_status_counts),
-            'by_priority': by_priority_combined, # Use our new, complete list
+            'by_priority': by_priority_combined,
             'by_category': by_category_renamed,
         })
         return Response(response_data)

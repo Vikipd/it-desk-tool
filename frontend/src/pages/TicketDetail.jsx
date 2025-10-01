@@ -1,5 +1,3 @@
-// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. I HAVE NOT SKIPPED A SINGLE LINE.
-
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -13,12 +11,40 @@ import {
   Download,
   Edit,
   Printer,
+  Trash2,
 } from "lucide-react";
 import Select from "react-select";
 import { useAuth } from "../hooks/useAuth.js";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import ActionModal from "../components/ActionModal.jsx";
+
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }) => {
+    if (!isOpen) return null;
+  
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
+        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+          <div className="mt-4 text-gray-600">{children}</div>
+          <div className="mt-6 flex justify-end gap-4">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            >
+              Confirm Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+};
 
 const formatToIST = (dateString) => {
   if (!dateString) return null;
@@ -43,11 +69,95 @@ const formatToIST = (dateString) => {
 
 const DetailItem = ({ label, value, fullWidth = false }) => (
   <div className={fullWidth ? "sm:col-span-2" : ""}>
-    {" "}
-    <p className="text-sm font-medium text-gray-500">{label}</p>{" "}
-    <p className="mt-1 text-base text-gray-900 break-words">{value || "--"}</p>{" "}
+    <p className="text-sm font-medium text-gray-500">{label}</p>
+    <p className="mt-1 text-base text-gray-900 break-words">{value || "--"}</p>
   </div>
 );
+
+const Section = ({ title, children }) => (
+  <div className="bg-gray-50 p-6 rounded-lg shadow-sm print:shadow-none print:border print:border-gray-200 print:bg-white">
+    <h2 className="text-xl font-semibold mb-4 border-b pb-2">{title}</h2>
+    {children}
+  </div>
+);
+
+const CommentItem = ({ comment }) => (
+  <div className="p-4 bg-white rounded-lg border-l-4 border-blue-300 print:border-none print:bg-transparent print:p-0 print:mb-2">
+    <div className="flex justify-between text-sm">
+      <p className="font-bold text-blue-800">{comment.author_username}</p>
+      <p className="text-gray-500">{formatToIST(comment.created_at)}</p>
+    </div>
+    <p className="mt-2 text-gray-800">{comment.text}</p>
+  </div>
+);
+
+const TimestampItem = ({ label, date }) =>
+  date ? (
+    <div className="flex justify-between items-center text-sm">
+      <p className="text-gray-600">{label}:</p>
+      <p className="font-semibold text-gray-800">{date}</p>
+    </div>
+  ) : null;
+
+const EditableTimestampItem = ({ label, selected, onChange }) => (
+  <div className="flex justify-between items-center text-sm">
+    <p className="text-gray-600">{label}:</p>
+    <DatePicker
+      selected={selected}
+      onChange={onChange}
+      showTimeSelect
+      dateFormat="Pp"
+      isClearable
+      className="w-full p-1 border rounded-md"
+    />
+  </div>
+);
+
+const AdminAssign = ({ ticket, onAssign }) => {
+  const { data: engineers, isLoading } = useQuery({
+    queryKey: ["engineers"],
+    queryFn: () => api.get("/api/technicians/").then((res) => res.data),
+  });
+  const engineerOptions =
+    engineers?.map((e) => ({ value: e.id, label: e.username })) || [];
+  const currentAssignee = engineerOptions.find(
+    (opt) => opt.value === ticket.assigned_to
+  );
+  return (
+    <Section title="Assign Engineer">
+      <Select
+        options={engineerOptions}
+        value={currentAssignee}
+        onChange={onAssign}
+        isClearable={true}
+        isLoading={isLoading}
+        placeholder="Unassigned"
+      />
+    </Section>
+  );
+};
+
+const AdminPriority = ({ ticket, onPriorityChange }) => {
+  const priorityOptions = [
+    { value: "CRITICAL", label: "Critical" },
+    { value: "HIGH", label: "High" },
+    { value: "MEDIUM", label: "Medium" },
+    { value: "LOW", label: "Low" },
+  ];
+  const currentPriority = priorityOptions.find(
+    (opt) => opt.value === ticket.priority
+  );
+  return (
+    <Section title="Change Priority">
+      <Select
+        options={priorityOptions}
+        value={currentPriority}
+        onChange={onPriorityChange}
+      />
+    </Section>
+  );
+};
+
 
 const EngineerActions = ({ ticket, onUpdate }) => {
   const { user } = useAuth();
@@ -154,6 +264,7 @@ const TicketDetail = () => {
   const [newComment, setNewComment] = useState("");
   const [isEditingTimestamps, setIsEditingTimestamps] = useState(false);
   const [editableTimestamps, setEditableTimestamps] = useState({});
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const {
     data: ticket,
@@ -218,6 +329,20 @@ const TicketDetail = () => {
     },
     onError: () => toast.error("Failed to update timestamps."),
   });
+  
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/api/tickets/${id}/`),
+    onSuccess: () => {
+        toast.success(`Ticket #${ticket.ticket_id} has been permanently deleted.`);
+        queryClient.invalidateQueries({ queryKey: ["filteredTickets"] });
+        queryClient.invalidateQueries({ queryKey: ["adminDashboardData"] });
+        navigate('/admin-dashboard');
+    },
+    onError: () => {
+        toast.error("Failed to delete the ticket.");
+        setIsDeleteModalOpen(false);
+    }
+  });
 
   const handleCommentSubmit = (e) => {
     if (e) e.preventDefault();
@@ -246,6 +371,10 @@ const TicketDetail = () => {
   const handlePrint = () => {
     window.print();
   };
+  
+  const handleDeleteConfirm = () => {
+    deleteMutation.mutate();
+  };
 
   if (isLoading)
     return (
@@ -268,298 +397,235 @@ const TicketDetail = () => {
   const isCommentBoxDisabled = commentMutation.isPending;
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-sans print:bg-white">
-      <div className="max-w-7xl mx-auto bg-white shadow-xl rounded-xl print:shadow-none">
-        <div className="p-6 sm:p-8 border-b flex justify-between items-center print:hidden">
-          <div className="flex items-center">
-            <button
-              onClick={() => navigate(-1)}
-              className="text-gray-600 hover:text-gray-900 mr-4"
-            >
-              <ArrowLeft size={24} />
-            </button>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-              Ticket #{ticket.ticket_id}
-            </h1>
+    <>
+      <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-sans print:bg-white">
+        <div className="max-w-7xl mx-auto bg-white shadow-xl rounded-xl print:shadow-none">
+          <div className="p-6 sm:p-8 border-b flex justify-between items-center print:hidden">
+            <div className="flex items-center">
+              <button
+                onClick={() => navigate(-1)}
+                className="text-gray-600 hover:text-gray-900 mr-4"
+              >
+                <ArrowLeft size={24} />
+              </button>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
+                Ticket #{ticket.ticket_id}
+              </h1>
+            </div>
+            <div className="flex items-center gap-4">
+                {role === 'ADMIN' && (
+                    <button
+                        onClick={() => setIsDeleteModalOpen(true)}
+                        className="flex items-center text-sm font-semibold bg-red-100 text-red-700 px-3 py-2 rounded-lg hover:bg-red-600 hover:text-white"
+                    >
+                        <Trash2 size={16} className="mr-2" /> Delete Ticket
+                    </button>
+                )}
+                <button
+                    onClick={handlePrint}
+                    className="flex items-center text-sm font-semibold bg-gray-200 text-gray-800 px-3 py-2 rounded-lg hover:bg-gray-300"
+                >
+                    <Printer size={16} className="mr-2" /> Print / Export PDF
+                </button>
+            </div>
           </div>
-          <button
-            onClick={handlePrint}
-            className="flex items-center text-sm font-semibold bg-gray-200 text-gray-800 px-3 py-2 rounded-lg hover:bg-gray-300"
-          >
-            <Printer size={16} className="mr-2" /> Print / Export PDF
-          </button>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6 sm:p-8 print:grid-cols-1">
-          <div className="lg:col-span-2 space-y-8 print:col-span-1">
-            <Section title="Hardware Details">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <DetailItem label="Node Name" value={cardDetails.node_name} />
-                <DetailItem
-                  label="Serial Number"
-                  value={cardDetails.serial_number}
-                />
-                <DetailItem label="Primary IP" value={cardDetails.primary_ip} />
-                <DetailItem label="AID" value={cardDetails.aid} />
-                <DetailItem
-                  label="Unit Part Number"
-                  value={cardDetails.unit_part_number}
-                />
-                <DetailItem label="CLEI" value={cardDetails.clei} />
-                <DetailItem label="Zone" value={cardDetails.zone} />
-                <DetailItem label="State" value={cardDetails.state} />
-                <DetailItem label="Node Type" value={cardDetails.node_type} />
-                <DetailItem label="Location" value={cardDetails.location} />
-                <DetailItem label="Card Type" value={cardDetails.card_type} />
-                <DetailItem label="Slot" value={cardDetails.slot} />
-              </div>
-            </Section>
-            <Section title="Fault Details">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <DetailItem
-                  label="Created By"
-                  value={ticket.created_by_username}
-                />
-                <DetailItem
-                  label="Assigned To"
-                  value={ticket.assigned_to_username}
-                />
-                <DetailItem label="Priority" value={ticket.priority} />
-                <DetailItem label="Status" value={ticket.status} />
-                <DetailItem
-                  label="Issue Description"
-                  value={ticket.fault_description}
-                  fullWidth
-                />
-                {ticket.other_card_type_description && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6 sm:p-8 print:grid-cols-1">
+            <div className="lg:col-span-2 space-y-8 print:col-span-1">
+              <Section title="Hardware Details">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                  <DetailItem label="Node Name" value={cardDetails.node_name} />
                   <DetailItem
-                    label="Other Card Type Info"
-                    value={ticket.other_card_type_description}
+                    label="Serial Number"
+                    value={cardDetails.serial_number}
+                  />
+                  <DetailItem label="Primary IP" value={cardDetails.primary_ip} />
+                  <DetailItem label="AID" value={cardDetails.aid} />
+                  <DetailItem
+                    label="Unit Part Number"
+                    value={cardDetails.unit_part_number}
+                  />
+                  <DetailItem label="CLEI" value={cardDetails.clei} />
+                  <DetailItem label="Zone" value={cardDetails.zone} />
+                  <DetailItem label="State" value={cardDetails.state} />
+                  <DetailItem label="Node Type" value={cardDetails.node_type} />
+                  <DetailItem label="Location" value={cardDetails.location} />
+                  <DetailItem label="Card Type" value={cardDetails.card_type} />
+                  <DetailItem label="Slot" value={cardDetails.slot} />
+                </div>
+              </Section>
+              <Section title="Fault Details">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                  <DetailItem
+                    label="Created By"
+                    value={ticket.created_by_username}
+                  />
+                  <DetailItem
+                    label="Assigned To"
+                    value={ticket.assigned_to_username}
+                  />
+                  <DetailItem label="Priority" value={ticket.priority} />
+                  <DetailItem label="Status" value={ticket.status} />
+                  <DetailItem
+                    label="Issue Description"
+                    value={ticket.fault_description}
                     fullWidth
                   />
+                  {ticket.other_card_type_description && (
+                    <DetailItem
+                      label="Other Card Type Info"
+                      value={ticket.other_card_type_description}
+                      fullWidth
+                    />
+                  )}
+                </div>
+              </Section>
+              <Section title="Comments">
+                <div className="space-y-4 max-h-96 overflow-y-auto pr-2 print:max-h-full print:overflow-visible">
+                  {ticket.comments
+                    ?.map((c) => <CommentItem key={c.id} comment={c} />)
+                    .reverse()}
+                </div>
+                <div className="mt-6 flex gap-2 print:hidden">
+                  <input
+                    type="text"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Add a comment..."
+                    className="flex-grow border rounded-md p-2"
+                    disabled={isCommentBoxDisabled}
+                  />
+                  <button
+                    onClick={handleCommentSubmit}
+                    type="button"
+                    className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 w-12 h-10 flex items-center justify-center"
+                    disabled={isCommentBoxDisabled || !newComment.trim()}
+                  >
+                    {commentMutation.isPending ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Send />
+                    )}
+                  </button>
+                </div>
+              </Section>
+            </div>
+            <div className="lg:col-span-1 space-y-8 print:space-y-0">
+              <div className="print:hidden">
+                {role === "TECHNICIAN" && (
+                  <EngineerActions ticket={ticket} onUpdate={refetch} />
                 )}
               </div>
-            </Section>
-            <Section title="Comments">
-              <div className="space-y-4 max-h-96 overflow-y-auto pr-2 print:max-h-full print:overflow-visible">
-                {ticket.comments
-                  ?.map((c) => <CommentItem key={c.id} comment={c} />)
-                  .reverse()}
-              </div>
-              <div className="mt-6 flex gap-2 print:hidden">
-                <input
-                  type="text"
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Add a comment..."
-                  className="flex-grow border rounded-md p-2"
-                  disabled={isCommentBoxDisabled}
-                />
-                <button
-                  onClick={handleCommentSubmit}
-                  type="button"
-                  className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 w-12 h-10 flex items-center justify-center"
-                  disabled={isCommentBoxDisabled || !newComment.trim()}
-                >
-                  {commentMutation.isPending ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <Send />
-                  )}
-                </button>
-              </div>
-            </Section>
-          </div>
-          <div className="lg:col-span-1 space-y-8 print:space-y-0">
-            <div className="print:hidden">
-              {role === "TECHNICIAN" && (
-                <EngineerActions ticket={ticket} onUpdate={refetch} />
-              )}
-            </div>
-            <div className="print:hidden">
-              {role === "ADMIN" && (
-                <>
-                  <AdminAssign ticket={ticket} onAssign={handleAssign} />
-                  <AdminPriority
-                    ticket={ticket}
-                    onPriorityChange={handlePriorityChange}
-                  />
-                  {ticket.status === "RESOLVED" && (
-                    <Section title="Admin Actions">
-                      <button
-                        onClick={handleCloseTicket}
-                        disabled={adminMutation.isPending}
-                        className="w-full text-white px-4 py-2 rounded-lg shadow bg-green-600 hover:bg-green-700"
-                      >
-                        Close Ticket
-                      </button>
-                    </Section>
-                  )}
-                </>
-              )}
-            </div>
-            <Section title="Ticket History">
-              <div className="flex justify-end mb-2 print:hidden">
+              <div className="print:hidden">
                 {role === "ADMIN" && (
                   <>
-                    {!isEditingTimestamps ? (
-                      <button
-                        onClick={() => setIsEditingTimestamps(true)}
-                        className="flex items-center text-sm text-blue-600 hover:underline"
-                      >
-                        <Edit size={14} className="mr-1" /> Edit Timestamps
-                      </button>
-                    ) : (
-                      <div className="flex gap-2">
+                    <AdminAssign ticket={ticket} onAssign={handleAssign} />
+                    <AdminPriority
+                      ticket={ticket}
+                      onPriorityChange={handlePriorityChange}
+                    />
+                    {ticket.status === "RESOLVED" && (
+                      <Section title="Admin Actions">
                         <button
-                          onClick={() => setIsEditingTimestamps(false)}
-                          className="text-sm"
+                          onClick={handleCloseTicket}
+                          disabled={adminMutation.isPending}
+                          className="w-full text-white px-4 py-2 rounded-lg shadow bg-green-600 hover:bg-green-700"
                         >
-                          Cancel
+                          Close Ticket
                         </button>
-                        <button
-                          onClick={handleSaveTimestamps}
-                          disabled={timestampMutation.isPending}
-                          className="text-sm font-semibold text-green-600 hover:underline"
-                        >
-                          {timestampMutation.isPending ? "Saving..." : "Save"}
-                        </button>
-                      </div>
+                      </Section>
                     )}
                   </>
                 )}
               </div>
-              <div className="space-y-3">
-                <TimestampItem
-                  label="Created At"
-                  date={formatToIST(ticket.created_at)}
-                />
-                {Object.keys(editableTimestamps).map((field) =>
-                  isEditingTimestamps ? (
-                    <EditableTimestampItem
-                      key={field}
-                      label={field.replace(/_/g, " ").replace("at", "At")}
-                      selected={editableTimestamps[field]}
-                      onChange={(date) => handleTimestampChange(field, date)}
-                    />
+              <Section title="Ticket History">
+                <div className="flex justify-end mb-2 print:hidden">
+                  {role === "ADMIN" && (
+                    <>
+                      {!isEditingTimestamps ? (
+                        <button
+                          onClick={() => setIsEditingTimestamps(true)}
+                          className="flex items-center text-sm text-blue-600 hover:underline"
+                        >
+                          <Edit size={14} className="mr-1" /> Edit Timestamps
+                        </button>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setIsEditingTimestamps(false)}
+                            className="text-sm"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleSaveTimestamps}
+                            disabled={timestampMutation.isPending}
+                            className="text-sm font-semibold text-green-600 hover:underline"
+                          >
+                            {timestampMutation.isPending ? "Saving..." : "Save"}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  <TimestampItem
+                    label="Created At"
+                    date={formatToIST(ticket.created_at)}
+                  />
+                  {Object.keys(editableTimestamps).map((field) =>
+                    isEditingTimestamps ? (
+                      <EditableTimestampItem
+                        key={field}
+                        label={field.replace(/_/g, " ").replace("at", "At")}
+                        selected={editableTimestamps[field]}
+                        onChange={(date) => handleTimestampChange(field, date)}
+                      />
+                    ) : (
+                      <TimestampItem
+                        key={field}
+                        label={field.replace(/_/g, " ").replace("at", "At")}
+                        date={formatToIST(ticket[field])}
+                      />
+                    )
+                  )}
+                </div>
+              </Section>
+              <Section title="Attachment">
+                <div className="print:hidden">
+                  {ticket.attachment ? (
+                    <a
+                      href={ticket.attachment}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center text-blue-600 hover:underline break-all"
+                    >
+                      <Download size={16} className="mr-2" /> View Attachment
+                    </a>
                   ) : (
-                    <TimestampItem
-                      key={field}
-                      label={field.replace(/_/g, " ").replace("at", "At")}
-                      date={formatToIST(ticket[field])}
-                    />
-                  )
-                )}
-              </div>
-            </Section>
-            <Section title="Attachment">
-              <div className="print:hidden">
-                {ticket.attachment ? (
-                  <a
-                    href={ticket.attachment}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center text-blue-600 hover:underline break-all"
-                  >
-                    <Download size={16} className="mr-2" /> View Attachment
-                  </a>
-                ) : (
-                  <p>No attachment provided.</p>
-                )}
-              </div>
-              <p className="hidden print:block">
-                {ticket.attachment
-                  ? "See digital record for attachment"
-                  : "No attachment provided."}
-              </p>
-            </Section>
+                    <p>No attachment provided.</p>
+                  )}
+                </div>
+                <p className="hidden print:block">
+                  {ticket.attachment
+                    ? "See digital record for attachment"
+                    : "No attachment provided."}
+                </p>
+              </Section>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
-
-const Section = ({ title, children }) => (
-  <div className="bg-gray-50 p-6 rounded-lg shadow-sm print:shadow-none print:border print:border-gray-200 print:bg-white">
-    {" "}
-    <h2 className="text-xl font-semibold mb-4 border-b pb-2">{title}</h2>{" "}
-    {children}{" "}
-  </div>
-);
-const CommentItem = ({ comment }) => (
-  <div className="p-4 bg-white rounded-lg border-l-4 border-blue-300 print:border-none print:bg-transparent print:p-0 print:mb-2">
-    <div className="flex justify-between text-sm">
-      <p className="font-bold text-blue-800">{comment.author_username}</p>
-      <p className="text-gray-500">{formatToIST(comment.created_at)}</p>
-    </div>
-    <p className="mt-2 text-gray-800">{comment.text}</p>
-  </div>
-);
-const TimestampItem = ({ label, date }) =>
-  date ? (
-    <div className="flex justify-between items-center text-sm">
-      {" "}
-      <p className="text-gray-600">{label}:</p>{" "}
-      <p className="font-semibold text-gray-800">{date}</p>{" "}
-    </div>
-  ) : null;
-const EditableTimestampItem = ({ label, selected, onChange }) => (
-  <div className="flex justify-between items-center text-sm">
-    {" "}
-    <p className="text-gray-600">{label}:</p>{" "}
-    <DatePicker
-      selected={selected}
-      onChange={onChange}
-      showTimeSelect
-      dateFormat="Pp"
-      isClearable
-      className="w-full p-1 border rounded-md"
-    />{" "}
-  </div>
-);
-const AdminAssign = ({ ticket, onAssign }) => {
-  const { data: engineers, isLoading } = useQuery({
-    queryKey: ["engineers"],
-    queryFn: () => api.get("/api/technicians/").then((res) => res.data),
-  });
-  const engineerOptions =
-    engineers?.map((e) => ({ value: e.id, label: e.username })) || [];
-  const currentAssignee = engineerOptions.find(
-    (opt) => opt.value === ticket.assigned_to
-  );
-  return (
-    <Section title="Assign Engineer">
-      {" "}
-      <Select
-        options={engineerOptions}
-        value={currentAssignee}
-        onChange={onAssign}
-        isClearable={true}
-        isLoading={isLoading}
-        placeholder="Unassigned"
-      />{" "}
-    </Section>
-  );
-};
-const AdminPriority = ({ ticket, onPriorityChange }) => {
-  const priorityOptions = [
-    { value: "CRITICAL", label: "Critical" },
-    { value: "HIGH", label: "High" },
-    { value: "MEDIUM", label: "Medium" },
-    { value: "LOW", label: "Low" },
-  ];
-  const currentPriority = priorityOptions.find(
-    (opt) => opt.value === ticket.priority
-  );
-  return (
-    <Section title="Change Priority">
-      {" "}
-      <Select
-        options={priorityOptions}
-        value={currentPriority}
-        onChange={onPriorityChange}
-      />{" "}
-    </Section>
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Confirm Deletion"
+      >
+        <p>Are you sure you want to permanently delete ticket <strong>#{ticket?.ticket_id}</strong>?</p>
+        <p className="mt-2 text-sm font-semibold text-red-600">This action cannot be undone.</p>
+      </ConfirmationModal>
+    </>
   );
 };
 

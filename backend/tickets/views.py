@@ -110,6 +110,13 @@ class TicketViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'priority']
     pagination_class = StandardResultsSetPagination
     
+    def get_permissions(self):
+        if self.action == 'destroy':
+            self.permission_classes = [permissions.IsAdminUser]
+        else:
+            self.permission_classes = [permissions.IsAuthenticated]
+        return super().get_permissions()
+
     def get_queryset(self):
         user = self.request.user
         queryset = Ticket.objects.select_related('created_by', 'assigned_to', 'card').all()

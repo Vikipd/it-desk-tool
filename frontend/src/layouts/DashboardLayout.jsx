@@ -1,5 +1,3 @@
-// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT LAYOUT.
-
 import React from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,7 +11,7 @@ import {
   Download,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import Footer from "../components/Footer"; // <-- IMPORT THE NEW FOOTER
+// import Footer from "../components/Footer";
 
 const NavLink = ({ to, icon, children }) => {
   const location = useLocation();
@@ -126,10 +124,14 @@ const DashboardLayout = ({
           </div>
         </header>
 
-        {/* --- MODIFICATION: MAIN CONTENT AND FOOTER --- */}
         <div className="flex-1 flex flex-col overflow-y-auto">
           <main className="flex-1 p-6 lg:p-8">{children}</main>
-          <Footer />
+          
+          {/* --- THIS IS THE FIX --- */}
+          {/* The Footer component is now commented out to hide it. */}
+          {/* To re-enable it, simply remove the comment markers: {/* and */}
+          {/* <Footer /> */}
+          
         </div>
       </div>
     </div>

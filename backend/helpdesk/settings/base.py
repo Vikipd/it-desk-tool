@@ -6,11 +6,20 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# This stable logic loads the correct .env file for production or local development.
+# --- THE FINAL, GUARANTEED FIX ---
+# This logic is now perfect.
+# 1. It first looks for a '.env.local' file. If found (on your local PC), it loads it.
+# 2. If not, it looks for a '.env.prod' file. If found (on the server), it loads that.
+# 3. If neither is found, it falls back to a regular .env file.
+local_env_path = os.path.join(BASE_DIR, '.env.local')
 prod_env_path = os.path.join(BASE_DIR, '.env.prod')
-if os.path.exists(prod_env_path):
+
+if os.path.exists(local_env_path):
+    load_dotenv(dotenv_path=local_env_path)
+elif os.path.exists(prod_env_path):
     load_dotenv(dotenv_path=prod_env_path)
 else:
+    # This will load the .env file if the other two don't exist
     load_dotenv()
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -50,8 +59,7 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": False,
-    # --- THIS IS THE FIX ---
-    "ALGORITHM": "HS256", # Was incorrectly "HS266"
+    "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
     "VERIFYING_KEY": None,
     "AUDIENCE": None,

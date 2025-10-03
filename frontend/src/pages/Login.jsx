@@ -1,5 +1,3 @@
-// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE LOGIN IS FIXED.
-
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
@@ -7,7 +5,7 @@ import { toast } from "react-hot-toast";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
 import { ACCESS_TOKEN, REFRESH_TOKEN } from "../constants";
 import { jwtDecode } from "jwt-decode";
-import Footer from "../components/Footer";
+// import Footer from "../components/Footer";
 
 const BrandingPanel = () => (
   <div className="relative w-full hidden lg:flex flex-col justify-center items-center text-center bg-blue-700 p-12 text-white overflow-hidden">
@@ -52,7 +50,6 @@ function Login() {
 
       localStorage.setItem(ACCESS_TOKEN, access);
       localStorage.setItem(REFRESH_TOKEN, refresh);
-      // --- MODIFICATION: THIS IS THE LINE I STUPIDLY REMOVED. IT IS NOW FIXED. ---
       localStorage.setItem("role", role?.trim().toUpperCase());
 
       toast.success("Login successful!");
@@ -88,6 +85,8 @@ function Login() {
       <div className="flex-grow flex items-center justify-center p-4">
         <div className="w-full max-w-6xl mx-auto bg-white rounded-2xl shadow-2xl flex overflow-hidden">
           <BrandingPanel />
+          {/* --- THIS IS THE FIX --- */}
+          {/* Restored the correct width class: lg:w-1/2 */}
           <div className="w-full lg:w-1/2 flex flex-col justify-center p-12 sm:p-16">
             <div className="w-full max-w-md mx-auto">
               <div className="text-center mb-8">
@@ -165,7 +164,11 @@ function Login() {
           </div>
         </div>
       </div>
-      <Footer />
+      
+      {/* --- THIS IS THE FIX --- */}
+      {/* The Footer component is correctly commented out to hide it. */}
+      {/* <Footer /> */}
+      
     </div>
   );
 }

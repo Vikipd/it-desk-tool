@@ -1,3 +1,5 @@
+# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
+
 from pathlib import Path
 import os
 import dj_database_url
@@ -6,11 +8,6 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# --- THE FINAL, GUARANTEED FIX ---
-# This logic is now perfect.
-# 1. It first looks for a '.env.local' file. If found (on your local PC), it loads it.
-# 2. If not, it looks for a '.env.prod' file. If found (on the server), it loads that.
-# 3. If neither is found, it falls back to a regular .env file.
 local_env_path = os.path.join(BASE_DIR, '.env.local')
 prod_env_path = os.path.join(BASE_DIR, '.env.prod')
 
@@ -19,7 +16,6 @@ if os.path.exists(local_env_path):
 elif os.path.exists(prod_env_path):
     load_dotenv(dotenv_path=prod_env_path)
 else:
-    # This will load the .env file if the other two don't exist
     load_dotenv()
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -78,7 +74,9 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
     "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
-    "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.CustomTokenObtainPairSerializer",
+    # --- THIS IS THE FIX ---
+    # Changed "CustomTokenObtainPairSerializer" to "MyTokenObtainPairSerializer"
+    "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.MyTokenObtainPairSerializer",
 }
 
 MIDDLEWARE = [

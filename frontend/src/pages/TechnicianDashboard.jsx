@@ -1,5 +1,7 @@
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
+
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import {
@@ -40,90 +42,105 @@ const TechnicianDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { role } = useAuth();
-
-  const [activeStatusFilter, setActiveStatusFilter] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
   const [username, setUsername] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [activeStatusFilter, setActiveStatusFilter] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const { data, error, isLoading } = useQuery({
-    queryKey: ["technicianDashboardData"],
+  const isTechnicianViewForAdmin = role === "ADMIN" || role === "OBSERVER";
+
+  const { data: statsData, isLoading: isStatsLoading } = useQuery({
+    queryKey: ["dashboardStats", "technicianView", role],
     queryFn: async () => {
-      const [profileResponse, allTicketsResponse] = await Promise.all([
+      const statsUrl = isTechnicianViewForAdmin
+        ? "/api/tickets/dashboard-stats/?view_as=technician"
+        : "/api/tickets/dashboard-stats/";
+      const [profileResponse, statsResponse] = await Promise.all([
         api.get("/api/auth/me/"),
-        api.get("/api/tickets/export-all/"),
+        api.get(statsUrl),
       ]);
       return {
         username: profileResponse.data.username,
-        allTickets: allTicketsResponse.data,
+        stats: statsResponse.data,
       };
     },
   });
 
-  const { username: fetchedUsername = "", allTickets = [] } = data || {};
+  const {
+    data: ticketsData,
+    error: ticketsError,
+    isLoading: isTicketsLoading,
+  } = useQuery({
+    queryKey: [
+      "tickets",
+      "technicianView",
+      role,
+      activeStatusFilter,
+      searchTerm,
+      currentPage,
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (isTechnicianViewForAdmin) {
+        params.append("assigned_to__role", "TECHNICIAN");
+      }
+      if (activeStatusFilter) {
+        const statusString = Array.isArray(activeStatusFilter)
+          ? activeStatusFilter.join(",")
+          : activeStatusFilter;
+        params.append("status", statusString);
+      }
+      if (searchTerm) {
+        params.append("search", searchTerm);
+      }
+      params.append("page", currentPage);
+      const response = await api.get(`/api/tickets/?${params.toString()}`);
+      return response.data;
+    },
+    keepPreviousData: true,
+  });
+
+  const { username: fetchedUsername = "", stats = {} } = statsData || {};
+  const { results: paginatedTickets = [], count: totalFilteredTickets = 0 } =
+    ticketsData || {};
+
   useEffect(() => {
     if (fetchedUsername) setUsername(fetchedUsername);
   }, [fetchedUsername]);
 
-  const stats = useMemo(() => {
-    if (!allTickets)
-      return { open: 0, inProgress: 0, resolved: 0, closed: 0, total: 0 };
-    const openTickets = allTickets.filter((t) => t.status === "OPEN").length;
-    const inProgressTickets = allTickets.filter((t) =>
-      ["IN_PROGRESS", "IN_TRANSIT", "UNDER_REPAIR", "ON_HOLD"].includes(
-        t.status
-      )
-    ).length;
-    const resolvedTickets = allTickets.filter(
-      (t) => t.status === "RESOLVED"
-    ).length;
-    const closedTickets = allTickets.filter(
-      (t) => t.status === "CLOSED"
-    ).length;
-    return {
-      open: openTickets,
-      inProgress: inProgressTickets,
-      resolved: resolvedTickets,
-      closed: closedTickets,
-      total: allTickets.length,
-    };
-  }, [allTickets]);
-
-  const filteredTickets = useMemo(() => {
-    let ticketsToFilter = allTickets;
-    if (activeStatusFilter) {
-      const filterStatuses = activeStatusFilter.split(",");
-      ticketsToFilter = ticketsToFilter.filter((ticket) =>
-        filterStatuses.includes(ticket.status)
-      );
-    }
-    if (searchTerm) {
-      const lowercasedFilter = searchTerm.toLowerCase();
-      ticketsToFilter = ticketsToFilter.filter(
-        (ticket) =>
-          Object.values(ticket).some((val) =>
-            String(val).toLowerCase().includes(lowercasedFilter)
-          ) ||
-          Object.values(ticket.card || {}).some((val) =>
-            String(val).toLowerCase().includes(lowercasedFilter)
-          )
-      );
-    }
-    return ticketsToFilter;
-  }, [allTickets, activeStatusFilter, searchTerm]);
-
   const ticketsPerPage = 10;
-  const paginatedTickets = useMemo(() => {
-    const startIndex = (currentPage - 1) * ticketsPerPage;
-    return filteredTickets.slice(startIndex, startIndex + ticketsPerPage);
-  }, [filteredTickets, currentPage]);
-
-  const totalPages = Math.ceil(filteredTickets.length / ticketsPerPage);
+  const totalPages = Math.ceil(totalFilteredTickets / ticketsPerPage);
   const hasNextPage = currentPage < totalPages;
   const hasPreviousPage = currentPage > 1;
 
+  const handleCardClick = (status) => {
+    setCurrentPage(1);
+    setSearchTerm("");
+    setActiveStatusFilter(status);
+  };
+
+  const handleSearchChange = (e) => {
+    setCurrentPage(1);
+    setSearchTerm(e.target.value);
+  };
+
   const exportMutation = useMutation({
-    mutationFn: () => api.get("/api/tickets/export-all/"),
+    mutationFn: () => {
+      const params = new URLSearchParams();
+      if (isTechnicianViewForAdmin) {
+        params.append("assigned_to__role", "TECHNICIAN");
+      }
+      if (activeStatusFilter) {
+        const statusString = Array.isArray(activeStatusFilter)
+          ? activeStatusFilter.join(",")
+          : activeStatusFilter;
+        params.append("status", statusString);
+      }
+      if (searchTerm) {
+        params.append("search", searchTerm);
+      }
+      return api.get(`/api/tickets/export-all/?${params.toString()}`);
+    },
     onSuccess: (response) => {
       const ticketsToExport = response.data;
       if (!ticketsToExport || ticketsToExport.length === 0) {
@@ -137,7 +154,7 @@ const TechnicianDashboard = () => {
         .getHours()
         .toString()
         .padStart(2, "0")}-${date.getMinutes().toString().padStart(2, "0")}`;
-      const defaultFilename = `my_assigned_tickets_export_${timestamp}.csv`;
+      const defaultFilename = `technician_tickets_export_${timestamp}.csv`;
       const filename = prompt("Please enter a filename:", defaultFilename);
       if (filename === null) {
         toast.error("Export cancelled.");
@@ -150,6 +167,8 @@ const TechnicianDashboard = () => {
         "Category",
         "Status",
         "Priority",
+        "Created By",
+        "Assigned To",
         "Created At",
         "Closed At",
       ];
@@ -157,13 +176,11 @@ const TechnicianDashboard = () => {
         [
           `"${ticket.ticket_id}"`,
           `"${ticket.card?.node_name || "N/A"}"`,
-          `"${
-            ticket.card?.card_type ||
-            ticket.other_card_type_description ||
-            "N/A"
-          }"`,
+          `"${ticket.card?.card_type || "N/A"}"`,
           `"${ticket.status}"`,
           `"${ticket.priority}"`,
+          `"${ticket.created_by?.username || "N/A"}"`,
+          `"${ticket.assigned_to?.username || "N/A"}"`,
           `"${new Date(ticket.created_at).toLocaleString()}"`,
           `"${
             ticket.closed_at ? new Date(ticket.closed_at).toLocaleString() : ""
@@ -210,20 +227,14 @@ const TechnicianDashboard = () => {
     }
   };
 
-  const handleCardClick = (status) => {
-    setActiveStatusFilter(status);
-    setSearchTerm("");
-    setCurrentPage(1);
-  };
-
-  if (error)
+  if (ticketsError)
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-slate-50 text-red-600">
         <AlertTriangle className="h-12 w-12 mb-4" />
-        <p className="text-xl font-semibold">{error.message}</p>
+        <p className="text-xl font-semibold">{ticketsError.message}</p>
         <button
           onClick={() =>
-            queryClient.invalidateQueries(["technicianDashboardData"])
+            queryClient.invalidateQueries(["tickets", "technicianView"])
           }
           className="mt-6 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition"
         >
@@ -254,9 +265,7 @@ const TechnicianDashboard = () => {
 
   return (
     <DashboardLayout
-      pageTitle={
-        role === "OBSERVER" ? "Engineer Tickets Overview" : "Engineer Dashboard"
-      }
+      pageTitle={role === "TECHNICIAN" ? "Engineer Dashboard" : "Engineer View"}
       username={username}
       onExport={() => exportMutation.mutate()}
       showExportButton={true}
@@ -265,37 +274,42 @@ const TechnicianDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
         <SummaryCard
           title="Total Assigned"
-          value={stats.total}
+          value={isStatsLoading ? "..." : stats.total_tickets || 0}
           icon={<Ticket size={24} className="text-blue-600" />}
           color="bg-blue-100"
-          onClick={() => handleCardClick("")}
+          onClick={() => handleCardClick(null)}
         />
         <SummaryCard
           title="Open"
-          value={stats.open}
+          value={isStatsLoading ? "..." : stats.open_tickets || 0}
           icon={<Ticket size={24} className="text-blue-600" />}
           color="bg-blue-100"
           onClick={() => handleCardClick("OPEN")}
         />
         <SummaryCard
           title="In Progress"
-          value={stats.inProgress}
+          value={isStatsLoading ? "..." : stats.in_progress_tickets || 0}
           icon={<Clock size={24} className="text-yellow-600" />}
           color="bg-yellow-100"
           onClick={() =>
-            handleCardClick("IN_PROGRESS,IN_TRANSIT,UNDER_REPAIR,ON_HOLD")
+            handleCardClick([
+              "IN_PROGRESS",
+              "IN_TRANSIT",
+              "UNDER_REPAIR",
+              "ON_HOLD",
+            ])
           }
         />
         <SummaryCard
           title="Resolved"
-          value={stats.resolved}
+          value={isStatsLoading ? "..." : stats.resolved_tickets || 0}
           icon={<CheckCircle size={24} className="text-purple-600" />}
           color="bg-purple-100"
           onClick={() => handleCardClick("RESOLVED")}
         />
         <SummaryCard
           title="Closed"
-          value={stats.closed}
+          value={isStatsLoading ? "..." : stats.closed_tickets || 0}
           icon={<CheckCircle size={24} className="text-green-600" />}
           color="bg-green-100"
           onClick={() => handleCardClick("CLOSED")}
@@ -304,16 +318,16 @@ const TechnicianDashboard = () => {
       <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200/80">
         <div className="p-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-800 tracking-tight">
-            {role === "OBSERVER"
-              ? "All Assigned Tickets"
-              : "My Assigned Tickets"}
+            {role === "TECHNICIAN"
+              ? "My Assigned Tickets"
+              : "All Assigned Tickets"}
           </h2>
           <div className="relative">
             <input
               type="text"
-              placeholder="Search your tickets..."
+              placeholder="Search tickets..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={handleSearchChange}
               className="w-full pl-10 pr-4 py-2 border rounded-lg"
             />
             <Search
@@ -322,7 +336,7 @@ const TechnicianDashboard = () => {
             />
           </div>
         </div>
-        {isLoading ? (
+        {isTicketsLoading ? (
           <div className="text-center py-20 px-6">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
           </div>
@@ -349,6 +363,12 @@ const TechnicianDashboard = () => {
                   <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                     Priority
                   </th>
+                  {/* --- THIS IS THE FIX: Conditionally render the 'Assigned To' column for admins --- */}
+                  {isTechnicianViewForAdmin && (
+                    <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
+                      Assigned To
+                    </th>
+                  )}
                   <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                     Created At
                   </th>
@@ -366,7 +386,7 @@ const TechnicianDashboard = () => {
                     onClick={() => navigate(`/tickets/${ticket.id}`)}
                   >
                     <td className="py-5 px-6 text-gray-600">
-                      {(currentPage - 1) * 10 + index + 1}
+                      {(currentPage - 1) * ticketsPerPage + index + 1}
                     </td>
                     <td className="py-5 px-6 font-semibold text-blue-700">
                       {ticket.ticket_id}
@@ -375,9 +395,7 @@ const TechnicianDashboard = () => {
                       {ticket.card?.node_name || "N/A"}
                     </td>
                     <td className="py-5 px-6 text-gray-800">
-                      {ticket.card?.card_type ||
-                        ticket.other_card_type_description ||
-                        "N/A"}
+                      {ticket.card?.card_type || "N/A"}
                     </td>
                     <td className="py-5 px-6">
                       <span
@@ -391,6 +409,12 @@ const TechnicianDashboard = () => {
                     <td className="py-5 px-6 text-gray-600">
                       {ticket.priority}
                     </td>
+                    {/* --- THIS IS THE FIX: Conditionally render the cell with the assignee's username --- */}
+                    {isTechnicianViewForAdmin && (
+                      <td className="py-5 px-6 text-gray-600 font-medium">
+                        {ticket.assigned_to?.username || "N/A"}
+                      </td>
+                    )}
                     <td className="py-5 px-6 text-gray-600">
                       {new Date(ticket.created_at).toLocaleString()}
                     </td>
@@ -410,46 +434,44 @@ const TechnicianDashboard = () => {
         ) : (
           <div className="text-center py-20 px-6">
             <h3 className="text-xl font-semibold text-gray-800">
-              {role === "OBSERVER"
-                ? "No tickets are currently assigned"
-                : "No tickets assigned to you"}
+              {role === "TECHNICIAN"
+                ? "No tickets assigned to you"
+                : "No assigned tickets match the current filters."}
             </h3>
             <p className="text-gray-500 mt-2">
-              {role === "OBSERVER"
-                ? "This view shows tickets actively assigned to engineers."
-                : "Check back later for new assignments."}
+              {role === "TECHNICIAN"
+                ? "Check back later for new assignments."
+                : "This view shows tickets actively assigned to engineers."}
             </p>
           </div>
         )}
       </div>
-
       <div className="mt-6 flex items-center justify-between">
         <div className="text-sm text-gray-700">
           Showing{" "}
           <span className="font-medium">
             {Math.min(
               (currentPage - 1) * ticketsPerPage + 1,
-              filteredTickets.length
+              totalFilteredTickets
             )}
           </span>{" "}
           to{" "}
           <span className="font-medium">
-            {Math.min(currentPage * ticketsPerPage, filteredTickets.length)}
+            {Math.min(currentPage * ticketsPerPage, totalFilteredTickets)}
           </span>{" "}
-          of <span className="font-medium">{filteredTickets.length}</span>{" "}
-          results
+          of <span className="font-medium">{totalFilteredTickets}</span> results
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
-            disabled={!hasPreviousPage || isLoading}
+            disabled={!hasPreviousPage}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ChevronLeft size={16} /> Previous
           </button>
           <button
             onClick={() => handlePageChange(currentPage + 1)}
-            disabled={!hasNextPage || isLoading}
+            disabled={!hasNextPage}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next <ChevronRight size={16} />

@@ -1,7 +1,8 @@
-# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE FILTER IS FIXED.
+# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import django_filters
-from .models import Ticket, Card
+from .models import Ticket
+from accounts.models import User # Import the User model to reference roles
 
 CARD_TYPE_GROUPS = {
     "Line Cards": ["2UX200", "2UX500"],
@@ -10,28 +11,32 @@ CARD_TYPE_GROUPS = {
     "Cross-Connect Cards": ["XST12T"],
 }
 
-# --- MODIFICATION: THIS IS A NEW HELPER CLASS TO HANDLE MULTIPLE VALUES ---
 class MultipleValueFilter(django_filters.BaseInFilter, django_filters.CharFilter):
-    """
-    Custom filter to handle comma-separated values for 'in' lookups.
-    For example: ?status=IN_PROGRESS,ON_HOLD
-    """
     pass
 
 class TicketFilter(django_filters.FilterSet):
-    # --- MODIFICATION: THE 'status' FIELD NOW USES OUR NEW CUSTOM FILTER ---
     status = MultipleValueFilter(field_name='status', lookup_expr='in')
-    
     card_category_group = django_filters.CharFilter(method='filter_by_main_card_group', label='Main Card Category Group')
     zone = django_filters.CharFilter(field_name='card__zone', lookup_expr='icontains')
     state = django_filters.CharFilter(field_name='card__state', lookup_expr='icontains')
     start_date = django_filters.DateFilter(field_name='created_at', lookup_expr='gte', label='Start Date')
     end_date = django_filters.DateFilter(field_name='created_at', lookup_expr='lte', label='End Date')
 
+    # --- THIS IS THE FIX ---
+    # The variable name has been corrected from ROLE_CHOICES to USER_ROLES to match your models.py file.
+    created_by__role = django_filters.ChoiceFilter(
+        field_name='created_by__role',
+        choices=User.USER_ROLES
+    )
+    assigned_to__role = django_filters.ChoiceFilter(
+        field_name='assigned_to__role',
+        choices=User.USER_ROLES
+    )
+    # --- END OF FIX ---
+
     class Meta:
         model = Ticket
-        # --- We add 'status' here so it can be overridden by our custom filter ---
-        fields = ['status', 'priority']
+        fields = ['status', 'priority', 'created_by__role', 'assigned_to__role']
 
     def filter_by_main_card_group(self, queryset, name, value):
         specific_card_types = CARD_TYPE_GROUPS.get(value)

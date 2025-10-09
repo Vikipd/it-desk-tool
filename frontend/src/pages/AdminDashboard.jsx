@@ -19,8 +19,6 @@ import {
   CheckCircle,
   Bell,
   Clock,
-  TrendingUp,
-  TrendingDown,
 } from "lucide-react";
 import UserModal from "../components/UserModal";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -33,6 +31,7 @@ const DashboardCard = ({
   isActionCard = false,
   isUserCard = false,
 }) => {
+  // ... (This component is correct and remains unchanged) ...
   const cardClasses = isUserCard
     ? "bg-indigo-100 border-2 border-indigo-400"
     : isActionCard
@@ -79,34 +78,58 @@ const DashboardCard = ({
   return cardContent;
 };
 
-const SlaPerformanceCard = ({ priority, targetDays, actualDays }) => {
-  const isBreached = parseFloat(actualDays) > targetDays;
-  const performancePercentage =
-    actualDays > 0
-      ? Math.min((targetDays / parseFloat(actualDays)) * 100, 100)
-      : 100;
+// --- THIS IS THE FIX (PART 2): REWRITTEN SLA CARD LOGIC ---
+const SlaPerformanceCard = ({
+  priority,
+  targetDays,
+  avgOpenAge,
+  openBreachedCount,
+}) => {
+  // Determine if the card should be in an "alert" state
+  const hasBreachedTickets = openBreachedCount > 0;
+
+  // The main text to display is the average age of OPEN tickets.
+  const displayDays = avgOpenAge;
+
   return (
-    <div className="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+    <div
+      className={`p-6 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between ${
+        hasBreachedTickets ? "bg-red-50" : "bg-white"
+      }`}
+    >
       <div>
         <h3 className="font-bold text-gray-800 text-lg">{priority} Priority</h3>
-        <p
-          className={`text-sm font-semibold flex items-center mt-1 ${
-            isBreached ? "text-red-500" : "text-green-500"
-          }`}
-        >
-          {isBreached ? (
-            <TrendingDown className="mr-2" size={18} />
-          ) : (
-            <TrendingUp className="mr-2" size={18} />
-          )}
-          {isBreached ? "SLA Breached" : "SLA Met"}
-        </p>
+        {hasBreachedTickets ? (
+          <p className="text-sm font-semibold flex items-center mt-1 text-red-500">
+            <AlertTriangle className="mr-2" size={18} />
+            SLA Breached
+          </p>
+        ) : (
+          <p className="text-sm font-semibold flex items-center mt-1 text-green-500">
+            <CheckCircle className="mr-2" size={18} />
+            SLA Met
+          </p>
+        )}
       </div>
+
+      {hasBreachedTickets && (
+        <div className="mt-4 text-center">
+          <p className="font-bold text-red-600">
+            {openBreachedCount} Open Ticket{openBreachedCount > 1 ? "s" : ""}
+          </p>
+          <p className="text-xs text-red-500">have breached their SLA</p>
+        </div>
+      )}
+
       <div className="my-4">
         <div className="flex justify-between items-baseline mb-1">
-          <span className="text-gray-500 text-sm">Actual Avg:</span>
-          <span className="font-bold text-2xl text-gray-800">
-            {parseFloat(actualDays).toFixed(1)} Days
+          <span className="text-gray-500 text-sm">Avg. Open Age:</span>
+          <span
+            className={`font-bold text-2xl ${
+              hasBreachedTickets ? "text-red-600" : "text-gray-800"
+            }`}
+          >
+            {displayDays.toFixed(1)} Days
           </span>
         </div>
         <div className="flex justify-between items-baseline">
@@ -114,21 +137,10 @@ const SlaPerformanceCard = ({ priority, targetDays, actualDays }) => {
           <span className="font-semibold text-gray-700">{targetDays} Days</span>
         </div>
       </div>
-      <div>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
-          <div
-            className={`h-2.5 rounded-full ${
-              isBreached ? "bg-red-500" : "bg-green-500"
-            }`}
-            style={{
-              width: `${isBreached ? "100%" : performancePercentage + "%"}`,
-            }}
-          ></div>
-        </div>
-      </div>
     </div>
   );
 };
+// --- END OF FIX (PART 2) ---
 
 const COLORS = [
   "#0088FE",
@@ -138,6 +150,7 @@ const COLORS = [
   "#8884d8",
   "#ff6666",
 ];
+// ... (The rest of the file remains unchanged) ...
 const RADIAN = Math.PI / 180;
 const renderCustomizedLabel = ({
   cx,
@@ -269,17 +282,12 @@ const AdminDashboard = () => {
           icon={<AlertTriangle size={24} />}
           to="/filtered-tickets?status=OPEN"
         />
-
-        {/* --- THIS IS THE FIX --- */}
-        {/* The 'to' prop now includes all "in progress" statuses, separated by commas. */}
-        {/* This will make the link on the card work correctly. */}
         <DashboardCard
           title="In Progress"
           value={summary.in_progress_tickets || 0}
           icon={<Clock size={24} />}
           to="/filtered-tickets?status=IN_PROGRESS,IN_TRANSIT,UNDER_REPAIR,ON_HOLD"
         />
-
         <DashboardCard
           title="Resolved Tickets"
           value={summary.resolved_tickets || 0}
@@ -311,7 +319,8 @@ const AdminDashboard = () => {
               key={priorityData.priority}
               priority={priorityData.priority}
               targetDays={priorityData.sla_target_days}
-              actualDays={priorityData.avg_resolution_days}
+              avgOpenAge={priorityData.avg_open_age_days}
+              openBreachedCount={priorityData.open_breached_count}
             />
           ))}
         </div>
@@ -383,7 +392,7 @@ const AdminDashboard = () => {
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="bg-.white p-6 rounded-xl shadow-lg">
+        <div className="bg-white p-6 rounded-xl shadow-lg">
           <h3 className="text-lg font-semibold mb-4">Tickets by Category</h3>
           <div style={{ width: "100%", height: 250 }}>
             <ResponsiveContainer>

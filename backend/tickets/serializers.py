@@ -1,9 +1,14 @@
-# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE ROOT CAUSE IS FIXED.
+# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from rest_framework import serializers
 from django.utils import timezone
 from .models import Ticket, Comment, Card
 from accounts.models import User
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name']
 
 class CardSerializer(serializers.ModelSerializer):
     class Meta:
@@ -12,14 +17,25 @@ class CardSerializer(serializers.ModelSerializer):
 
 class CommentSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source='author.username', read_only=True)
-    # --- MODIFICATION: THE BROKEN FORMAT IS REMOVED. THIS FIXES THE CRASH. ---
-    # The backend will now send a standard ISO date string that JavaScript understands.
     created_at = serializers.DateTimeField(read_only=True)
     
     class Meta:
         model = Comment
         fields = ['id', 'ticket', 'author', 'author_username', 'text', 'created_at']
         read_only_fields = ['author', 'ticket']
+
+# --- NEW SERIALIZER FOR LIST VIEWS ---
+class TicketListSerializer(serializers.ModelSerializer):
+    created_by = UserSerializer(read_only=True)
+    assigned_to = UserSerializer(read_only=True)
+    card = CardSerializer(read_only=True)
+
+    class Meta:
+        model = Ticket
+        fields = [
+            'id', 'ticket_id', 'created_by', 'assigned_to', 'card', 'status', 
+            'priority', 'created_at', 'closed_at'
+        ]
 
 class TicketCreateSerializer(serializers.ModelSerializer):
     serial_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -85,21 +101,23 @@ class TicketCreateSerializer(serializers.ModelSerializer):
         return ticket
 
 class TicketDetailSerializer(serializers.ModelSerializer):
-    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
-    assigned_to_username = serializers.CharField(source='assigned_to.username', read_only=True, allow_null=True)
+    created_by = UserSerializer(read_only=True)
+    # On the detail page, we need to be able to *update* the assigned_to field with an ID
+    assigned_to = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role=User.TECHNICIAN), allow_null=True, required=False)
     card = CardSerializer(read_only=True)
     comments = CommentSerializer(many=True, read_only=True)
-    assigned_to = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role=User.TECHNICIAN), allow_null=True, required=False)
-    
+    assigned_to_username = serializers.CharField(source='assigned_to.username', read_only=True, allow_null=True)
+
     class Meta:
         model = Ticket
         fields = [
-            'id', 'ticket_id', 'created_by_username', 'assigned_to', 'assigned_to_username', 'card', 'comments',
-            'fault_description', 'priority', 'attachment', 'other_card_type_description',
-            'status', 'created_at', 'updated_at', 'assigned_at', 'in_progress_at', 'in_transit_at', 
-            'under_repair_at', 'on_hold_at', 'resolved_at', 'closed_at', 'sla_days'
+            'id', 'ticket_id', 'created_by', 'assigned_to', 'assigned_to_username',
+            'card', 'comments', 'fault_description', 'priority', 'attachment', 
+            'other_card_type_description', 'status', 'created_at', 'updated_at', 
+            'assigned_at', 'in_progress_at', 'in_transit_at', 'under_repair_at', 
+            'on_hold_at', 'resolved_at', 'closed_at', 'sla_days'
         ]
-        read_only_fields = ['ticket_id', 'created_at', 'updated_at']
+        read_only_fields = ['ticket_id', 'created_at', 'updated_at', 'created_by']
 
 class StatusUpdateWithCommentSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Ticket.STATUS_CHOICES)

@@ -24,7 +24,6 @@ class CommentSerializer(serializers.ModelSerializer):
         fields = ['id', 'ticket', 'author', 'author_username', 'text', 'created_at']
         read_only_fields = ['author', 'ticket']
 
-# --- NEW SERIALIZER FOR LIST VIEWS ---
 class TicketListSerializer(serializers.ModelSerializer):
     created_by = UserSerializer(read_only=True)
     assigned_to = UserSerializer(read_only=True)
@@ -102,7 +101,6 @@ class TicketCreateSerializer(serializers.ModelSerializer):
 
 class TicketDetailSerializer(serializers.ModelSerializer):
     created_by = UserSerializer(read_only=True)
-    # On the detail page, we need to be able to *update* the assigned_to field with an ID
     assigned_to = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role=User.TECHNICIAN), allow_null=True, required=False)
     card = CardSerializer(read_only=True)
     comments = CommentSerializer(many=True, read_only=True)

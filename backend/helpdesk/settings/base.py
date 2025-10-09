@@ -8,15 +8,10 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-local_env_path = os.path.join(BASE_DIR, '.env.local')
-prod_env_path = os.path.join(BASE_DIR, '.env.prod')
-
-if os.path.exists(local_env_path):
-    load_dotenv(dotenv_path=local_env_path)
-elif os.path.exists(prod_env_path):
-    load_dotenv(dotenv_path=prod_env_path)
-else:
-    load_dotenv()
+# --- THIS IS THE FIX ---
+# This simplified logic is more robust. The correct .env file (.env.local on Windows, 
+# .env.prod on the server) will be loaded by the correct startup command.
+load_dotenv()
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
@@ -74,8 +69,6 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
     "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
-    # --- THIS IS THE FIX ---
-    # Changed "CustomTokenObtainPairSerializer" to "MyTokenObtainPairSerializer"
     "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.MyTokenObtainPairSerializer",
 }
 
@@ -128,6 +121,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
+# This will be overridden in production.py for the server
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
 
 CORS_ALLOW_CREDENTIALS = True

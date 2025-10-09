@@ -3,7 +3,8 @@
 from rest_framework import generics, permissions, status, views
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .models import User
+from rest_framework.pagination import PageNumberPagination
+from .models import User, Contact
 from .serializers import (
     MyTokenObtainPairSerializer,
     UserSerializer,
@@ -12,42 +13,34 @@ from .serializers import (
     AdminPasswordResetSerializer,
     ForcedChangePasswordSerializer,
     ChangePasswordSerializer,
-    UserDetailsValidationSerializer # <-- MODIFICATION: Import the new serializer
+    UserDetailsValidationSerializer,
+    ContactSerializer
 )
 from .permissions import IsAdminOrReadOnly, IsAdminRole
 
-# --- MODIFICATION: NEW VIEW FOR "FORGOT PASSWORD" ---
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+# ... (All User-related views remain unchanged) ...
 class UserDetailsValidationView(views.APIView):
-    """
-    Validates user details for password reset requests.
-    This view is public and does not require authentication.
-    """
     permission_classes = [permissions.AllowAny]
     serializer_class = UserDetailsValidationSerializer
-
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            # The validation logic is handled entirely within the serializer.
-            # If we get here, it means the user exists and the details match.
             return Response({"success": "User details validated successfully."}, status=status.HTTP_200_OK)
-        
-        # If the serializer is not valid, it will contain the error messages.
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
     def get_serializer(self, *args, **kwargs):
         return self.serializer_class(*args, **kwargs)
-# --- END OF NEW VIEW ---
-
 
 class ChangePasswordView(generics.UpdateAPIView):
     serializer_class = ForcedChangePasswordSerializer
     model = User
     permission_classes = (permissions.IsAuthenticated,)
-
     def get_object(self, queryset=None):
         return self.request.user
-
     def update(self, request, *args, **kwargs):
         self.object = self.get_object()
         serializer = self.get_serializer(data=request.data)
@@ -73,12 +66,10 @@ class UserListCreateView(generics.ListCreateAPIView):
 class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     permission_classes = [IsAdminOrReadOnly]
-    
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
             return UserUpdateSerializer
         return UserSerializer
-
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         if instance == request.user:
@@ -119,3 +110,23 @@ class TechnicianListView(generics.ListAPIView):
     queryset = User.objects.filter(role=User.TECHNICIAN, is_active=True).order_by('first_name')
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+# --- THIS IS THE FIX ---
+class ContactListView(generics.ListAPIView):
+    """
+    This view provides a paginated list of contacts for the main page display.
+    """
+    queryset = Contact.objects.all()
+    serializer_class = ContactSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+
+class ContactExportView(generics.ListAPIView):
+    """
+    This is a new, non-paginated view specifically for exporting all contacts.
+    """
+    queryset = Contact.objects.all()
+    serializer_class = ContactSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    # NOTE: pagination_class is deliberately NOT set, so it returns all results.

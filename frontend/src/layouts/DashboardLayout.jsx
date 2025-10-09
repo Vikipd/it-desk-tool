@@ -13,6 +13,7 @@ import {
   Download,
   Menu,
   X,
+  BookUser, // Add the correct icon import
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 
@@ -27,10 +28,12 @@ const NavLink = ({ to, icon, children, collapsed }) => {
           isActive
             ? "bg-blue-600 text-white"
             : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
-        } ${collapsed && 'justify-center'}`}
+        } ${collapsed && "justify-center"}`}
       >
         {icon}
-        {!collapsed && <span className="ml-3 whitespace-nowrap">{children}</span>}
+        {!collapsed && (
+          <span className="ml-3 whitespace-nowrap">{children}</span>
+        )}
       </Link>
       {collapsed && (
         <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
@@ -72,47 +75,86 @@ const DashboardLayout = ({
         <div className="h-20 flex items-center justify-center p-4 border-b border-slate-200 shrink-0">
           {isSidebarCollapsed ? (
             <Link to="/admin-dashboard">
-              <img src="/assets/images/favicon.png" alt="HFCL Icon" className="h-8 w-auto" />
+              <img
+                src="/assets/images/favicon.png"
+                alt="HFCL Icon"
+                className="h-8 w-auto"
+              />
             </Link>
           ) : (
             <div className="flex items-center space-x-2">
-                <img src="/assets/images/hfcl.png" alt="HFCL Logo" className="h-10 w-auto" />
-                <h2 className="text-lg font-semibold text-slate-700 whitespace-nowrap">ServiceDesk</h2>
+              <img
+                src="/assets/images/hfcl.png"
+                alt="HFCL Logo"
+                className="h-10 w-auto"
+              />
+              <h2 className="text-lg font-semibold text-slate-700 whitespace-nowrap">
+                ServiceDesk
+              </h2>
             </div>
           )}
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2">
           {(role === "ADMIN" || role === "OBSERVER") && (
-            <NavLink to="/admin-dashboard" icon={<LayoutDashboard size={20} />} collapsed={isSidebarCollapsed}>
+            <NavLink
+              to="/admin-dashboard"
+              icon={<LayoutDashboard size={20} />}
+              collapsed={isSidebarCollapsed}
+            >
               Admin Overview
             </NavLink>
           )}
           {(role === "CLIENT" || role === "ADMIN" || role === "OBSERVER") && (
-            <NavLink to="/client-dashboard" icon={<Ticket size={20} />} collapsed={isSidebarCollapsed}>
+            <NavLink
+              to="/client-dashboard"
+              icon={<Ticket size={20} />}
+              collapsed={isSidebarCollapsed}
+            >
               Client View
             </NavLink>
           )}
-          {(role === "TECHNICIAN" || role === "ADMIN" || role === "OBSERVER") && (
-            <NavLink to="/technician-dashboard" icon={<Users size={20} />} collapsed={isSidebarCollapsed}>
+          {(role === "TECHNICIAN" ||
+            role === "ADMIN" ||
+            role === "OBSERVER") && (
+            <NavLink
+              to="/technician-dashboard"
+              icon={<Users size={20} />}
+              collapsed={isSidebarCollapsed}
+            >
               Engineer View
             </NavLink>
           )}
           {(role === "ADMIN" || role === "OBSERVER") && (
-            <NavLink to="/filtered-tickets" icon={<FileSearch size={20} />} collapsed={isSidebarCollapsed}>
+            <NavLink
+              to="/filtered-tickets"
+              icon={<FileSearch size={20} />}
+              collapsed={isSidebarCollapsed}
+            >
               All Tickets
             </NavLink>
           )}
+          <NavLink
+            to="/contacts"
+            icon={<BookUser size={20} />}
+            collapsed={isSidebarCollapsed}
+          >
+            Contacts
+          </NavLink>
         </nav>
 
         <div className="px-4 py-4 border-t border-slate-200">
           <div className="relative group">
             <button
               onClick={handleLogout}
-              className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors bg-red-50 text-red-700 hover:bg-red-600 hover:text-white ${isSidebarCollapsed && 'justify-center'}`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors bg-red-50 text-red-700 hover:bg-red-600 hover:text-white ${
+                isSidebarCollapsed && "justify-center"
+              }`}
             >
               <LogOut size={20} />
-              {!isSidebarCollapsed && <span className="ml-3 font-semibold">Logout</span>}
+              {!isSidebarCollapsed && (
+                <span className="ml-3 font-semibold">Logout</span>
+              )}
             </button>
             {isSidebarCollapsed && (
               <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
@@ -139,7 +181,10 @@ const DashboardLayout = ({
             <div className="flex items-center space-x-4">
               {headerActions}
               {showExportButton && (
-                <button onClick={onExport} className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-sm text-sm">
+                <button
+                  onClick={onExport}
+                  className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-sm text-sm"
+                >
                   <Download size={16} className="mr-2" /> Export
                 </button>
               )}

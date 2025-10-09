@@ -2,11 +2,9 @@
 
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import User
+from .models import User, Contact # Add Contact to the import
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-# --- MODIFICATION START ---
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
-# --- MODIFICATION END ---
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -17,30 +15,19 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['must_change_password'] = user.must_change_password
         return token
 
-    # --- MODIFICATION START: OVERRIDE VALIDATE METHOD FOR SPECIFIC ERRORS ---
     def validate(self, attrs):
         username = attrs.get(self.username_field)
         password = attrs.get('password')
-
-        # Step 1: Check if a user with the given username exists.
         try:
             user = User.objects.get(username__iexact=username)
         except User.DoesNotExist:
             raise AuthenticationFailed("No active account found with this username.")
-
-        # Step 2: Check if the user's account is active.
         if not user.is_active:
             raise AuthenticationFailed("This user account has been deactivated.")
-
-        # Step 3: Check if the password is correct for the user.
         if not user.check_password(password):
             raise AuthenticationFailed("Incorrect password. Please try again.")
-
-        # If all checks pass, use the parent class's logic to generate the token.
         data = super().validate(attrs)
         return data
-    # --- MODIFICATION END ---
-
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -141,34 +128,23 @@ class UserDetailsValidationSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150, required=True)
     email = serializers.EmailField(required=True)
     phone_number = serializers.CharField(max_length=20, required=True)
-    
-    # --- MODIFICATION START: VALIDATE FORGOT PASSWORD FIELDS INDIVIDUALLY ---
     def validate(self, data):
         username = data.get('username')
         email = data.get('email')
         phone_number = data.get('phone_number')
-        
-        # Step 1: Check if the username exists and the account is active.
         try:
             user = User.objects.get(username__iexact=username, is_active=True)
         except User.DoesNotExist:
-            # Raise a field-specific error for the username.
-            raise serializers.ValidationError({
-                "username": "No active account found with this username."
-            })
-            
-        # Step 2: If the user exists, check if the email matches.
+            raise serializers.ValidationError({"username": "No active account found with this username."})
         if user.email.lower() != email.lower():
-            raise serializers.ValidationError({
-                "email": "The email address provided does not match the account's records."
-            })
-            
-        # Step 3: If the email matches, check if the phone number matches.
+            raise serializers.ValidationError({"email": "The email address provided does not match the account's records."})
         if user.phone_number != phone_number:
-            raise serializers.ValidationError({
-                "phone_number": "The phone number provided does not match the account's records."
-            })
-
+            raise serializers.ValidationError({"phone_number": "The phone number provided does not match the account's records."})
         data['user'] = user
         return data
-    # --- MODIFICATION END ---
+
+# --- THIS IS THE NEW SERIALIZER ---
+class ContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contact
+        fields = ['id', 'name', 'role', 'zone', 'state', 'mobile', 'email']

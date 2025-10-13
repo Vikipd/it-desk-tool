@@ -1,6 +1,6 @@
 # COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
-from rest_framework import generics, permissions, status, views
+from rest_framework import generics, permissions, status, views, viewsets, filters
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.pagination import PageNumberPagination
@@ -23,7 +23,6 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     max_page_size = 100
 
-# ... (All User-related views remain unchanged) ...
 class UserDetailsValidationView(views.APIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = UserDetailsValidationSerializer
@@ -52,8 +51,13 @@ class ChangePasswordView(generics.UpdateAPIView):
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
 
+# --- THIS IS THE FIX ---
 class UserListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdminOrReadOnly]
+    pagination_class = StandardResultsSetPagination  # Add pagination
+    filter_backends = [filters.SearchFilter]        # Add search
+    search_fields = ['username', 'first_name', 'last_name', 'email', 'phone_number', 'role']
+
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return UserCreateSerializer
@@ -62,21 +66,23 @@ class UserListCreateView(generics.ListCreateAPIView):
         is_active_param = self.request.query_params.get('is_active', 'true')
         is_active = is_active_param.lower() == 'true'
         return User.objects.filter(is_active=is_active).order_by('username')
+# --- END OF FIX ---
 
 class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     permission_classes = [IsAdminOrReadOnly]
+    
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
             return UserUpdateSerializer
         return UserSerializer
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        if instance == request.user:
-            return Response({"detail": "You cannot deactivate your own account."}, status=status.HTTP_403_FORBIDDEN)
+
+    def perform_destroy(self, instance):
+        if instance == self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You cannot deactivate your own account.")
         instance.is_active = False
         instance.save()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class RestoreUserView(views.APIView):
     permission_classes = [IsAdminRole]
@@ -111,22 +117,13 @@ class TechnicianListView(generics.ListAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-
-# --- THIS IS THE FIX ---
 class ContactListView(generics.ListAPIView):
-    """
-    This view provides a paginated list of contacts for the main page display.
-    """
-    queryset = Contact.objects.all()
+    queryset = Contact.objects.order_by('name')
     serializer_class = ContactSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardResultsSetPagination
 
 class ContactExportView(generics.ListAPIView):
-    """
-    This is a new, non-paginated view specifically for exporting all contacts.
-    """
-    queryset = Contact.objects.all()
+    queryset = Contact.objects.order_by('name')
     serializer_class = ContactSerializer
     permission_classes = [permissions.IsAuthenticated]
-    # NOTE: pagination_class is deliberately NOT set, so it returns all results.

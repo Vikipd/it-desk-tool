@@ -13,7 +13,8 @@ import {
   Download,
   Menu,
   X,
-  BookUser, // Add the correct icon import
+  BookUser,
+  History,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 
@@ -36,7 +37,7 @@ const NavLink = ({ to, icon, children, collapsed }) => {
         )}
       </Link>
       {collapsed && (
-        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
           {children}
         </div>
       )}
@@ -65,6 +66,22 @@ const DashboardLayout = ({
     toast.success("Logged out successfully.");
   };
 
+  // --- THIS IS THE FIX ---
+  // This helper function determines the correct home dashboard based on the user's role.
+  const getHomeDashboardUrl = () => {
+    switch (role) {
+      case "ADMIN":
+      case "OBSERVER":
+        return "/admin-dashboard";
+      case "CLIENT":
+        return "/client-dashboard";
+      case "TECHNICIAN":
+        return "/technician-dashboard";
+      default:
+        return "/login"; // Fallback
+    }
+  };
+
   return (
     <div className="flex h-screen bg-slate-100 font-sans">
       <aside
@@ -74,7 +91,8 @@ const DashboardLayout = ({
       >
         <div className="h-20 flex items-center justify-center p-4 border-b border-slate-200 shrink-0">
           {isSidebarCollapsed ? (
-            <Link to="/admin-dashboard">
+            // The link now uses the dynamic URL function
+            <Link to={getHomeDashboardUrl()}>
               <img
                 src="/assets/images/favicon.png"
                 alt="HFCL Icon"
@@ -82,7 +100,11 @@ const DashboardLayout = ({
               />
             </Link>
           ) : (
-            <div className="flex items-center space-x-2">
+            // The expanded logo is also a clickable link to the user's home
+            <Link
+              to={getHomeDashboardUrl()}
+              className="flex items-center space-x-2"
+            >
               <img
                 src="/assets/images/hfcl.png"
                 alt="HFCL Logo"
@@ -91,7 +113,7 @@ const DashboardLayout = ({
               <h2 className="text-lg font-semibold text-slate-700 whitespace-nowrap">
                 ServiceDesk
               </h2>
-            </div>
+            </Link>
           )}
         </div>
 
@@ -141,6 +163,15 @@ const DashboardLayout = ({
           >
             Contacts
           </NavLink>
+          {(role === "ADMIN" || role === "OBSERVER") && (
+            <NavLink
+              to="/activity-log"
+              icon={<History size={20} />}
+              collapsed={isSidebarCollapsed}
+            >
+              Activity Log
+            </NavLink>
+          )}
         </nav>
 
         <div className="px-4 py-4 border-t border-slate-200">
@@ -157,7 +188,7 @@ const DashboardLayout = ({
               )}
             </button>
             {isSidebarCollapsed && (
-              <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+              <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
                 Logout
               </div>
             )}

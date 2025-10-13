@@ -2,9 +2,12 @@
 
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import User, Contact # Add Contact to the import
+from .models import User, Contact
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
+# --- THIS IS THE FIX ---
+# We now import the activity logger from the correct app.
+from tickets.activity_logger import log_activity 
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -17,16 +20,23 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         username = attrs.get(self.username_field)
-        password = attrs.get('password')
-        try:
-            user = User.objects.get(username__iexact=username)
-        except User.DoesNotExist:
+        password = attrs.get("password")
+        
+        user = User.objects.filter(username__iexact=username).first()
+
+        if user is None:
             raise AuthenticationFailed("No active account found with this username.")
+        
         if not user.is_active:
             raise AuthenticationFailed("This user account has been deactivated.")
+
         if not user.check_password(password):
             raise AuthenticationFailed("Incorrect password. Please try again.")
+        
         data = super().validate(attrs)
+        
+        log_activity(self.user, 'USER_LOGIN', target=self.user.username, details="User logged in successfully.")
+        
         return data
 
 class UserCreateSerializer(serializers.ModelSerializer):
@@ -143,7 +153,6 @@ class UserDetailsValidationSerializer(serializers.Serializer):
         data['user'] = user
         return data
 
-# --- THIS IS THE NEW SERIALIZER ---
 class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact

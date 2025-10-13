@@ -1,4 +1,4 @@
-// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE FILTER IS FIXED.
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
@@ -6,11 +6,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Search,
   ChevronLeft,
+  ChevronRight,
   FileDown,
   Edit,
   Trash2,
   RotateCcw,
   PlusCircle,
+  Loader2,
 } from "lucide-react";
 import { CSVLink } from "react-csv";
 import api from "../api";
@@ -35,6 +37,7 @@ const UserManagementPage = () => {
   const [editingUser, setEditingUser] = useState(null);
   const queryClient = useQueryClient();
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -48,19 +51,30 @@ const UserManagementPage = () => {
     fetchCurrentUser();
   }, []);
 
-  const fetchUsers = async (tab) => {
-    const isActive = tab === "active";
-    const response = await api.get(`/api/users/?is_active=${isActive}`);
-    return response.data;
-  };
+  const queryKey = ["users", activeTab, searchTerm, currentPage];
 
-  const { data: users = [], isLoading } = useQuery({
-    queryKey: ["users", activeTab],
-    queryFn: () => fetchUsers(activeTab),
+  const { data, isLoading } = useQuery({
+    queryKey: queryKey,
+    queryFn: async () => {
+      const isActive = activeTab === "active";
+      const params = {
+        is_active: isActive,
+        search: searchTerm || undefined,
+        page: currentPage,
+      };
+      const response = await api.get(`/api/auth/users/`, { params });
+      return response.data;
+    },
+    keepPreviousData: true,
   });
 
+  const users = data?.results || [];
+  const totalCount = data?.count || 0;
+  const hasNextPage = data?.next !== null;
+  const hasPreviousPage = data?.previous !== null;
+
   const deactivateUserMutation = useMutation({
-    mutationFn: (userId) => api.delete(`/api/users/${userId}/`),
+    mutationFn: (userId) => api.delete(`/api/auth/users/${userId}/`),
     onSuccess: () => {
       toast.success("User deactivated.");
       queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -69,7 +83,7 @@ const UserManagementPage = () => {
   });
 
   const restoreUserMutation = useMutation({
-    mutationFn: (userId) => api.post(`/api/users/${userId}/restore/`),
+    mutationFn: (userId) => api.post(`/api/auth/users/${userId}/restore/`),
     onSuccess: () => {
       toast.success("User restored.");
       queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -97,6 +111,12 @@ const UserManagementPage = () => {
     queryClient.invalidateQueries({ queryKey: ["users"] });
   };
 
+  const handlePageChange = (newPage) => {
+    if (newPage > 0 && (!totalCount || newPage <= Math.ceil(totalCount / 10))) {
+      setCurrentPage(newPage);
+    }
+  };
+
   const csvHeaders = [
     { label: "Username", key: "username" },
     { label: "Full Name", key: "full_name" },
@@ -111,21 +131,6 @@ const UserManagementPage = () => {
     role: roleDisplayMap[user.role] || user.role,
     phone_number: user.phone_number || "--",
   }));
-
-  // --- MODIFICATION: SEARCH LOGIC NOW INCLUDES ROLE AND PHONE ---
-  const filteredUsers = users.filter((user) => {
-    const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    const userRole = (roleDisplayMap[user.role] || user.role).toLowerCase();
-
-    return (
-      user.username.toLowerCase().includes(lowerCaseSearchTerm) ||
-      (user.full_name &&
-        user.full_name.toLowerCase().includes(lowerCaseSearchTerm)) ||
-      (user.email && user.email.toLowerCase().includes(lowerCaseSearchTerm)) ||
-      (user.phone_number && user.phone_number.includes(searchTerm)) || // Phone number doesn't need to be lowercase
-      userRole.includes(lowerCaseSearchTerm)
-    );
-  });
 
   const getActionsForUser = (user) => {
     if (user.id === currentUser?.id) return [];
@@ -189,17 +194,22 @@ const UserManagementPage = () => {
           <TabButton
             title="Active Members"
             isActive={activeTab === "active"}
-            onClick={() => setActiveTab("active")}
+            onClick={() => {
+              setActiveTab("active");
+              setCurrentPage(1);
+            }}
           />
           <TabButton
             title="Inactive Members"
             isActive={activeTab === "inactive"}
-            onClick={() => setActiveTab("inactive")}
+            onClick={() => {
+              setActiveTab("inactive");
+              setCurrentPage(1);
+            }}
           />
         </div>
         <div className="flex items-center justify-between mb-4">
           <div className="relative">
-            {/* --- MODIFICATION: PLACEHOLDER TEXT UPDATED --- */}
             <input
               type="text"
               placeholder="Search by name, username, email, role, phone..."
@@ -212,16 +222,21 @@ const UserManagementPage = () => {
               className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
             />
           </div>
-          <CSVLink
-            data={csvData}
-            headers={csvHeaders}
-            filename={`users-${activeTab}-${
-              new Date().toISOString().split("T")[0]
-            }.csv`}
-            className="flex items-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm"
+          <button
+            disabled={csvData.length === 0}
+            className="flex items-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm disabled:bg-gray-400"
           >
-            <FileDown size={16} className="mr-2" /> Download CSV
-          </CSVLink>
+            <FileDown size={16} className="mr-2" />
+            <CSVLink
+              data={csvData}
+              headers={csvHeaders}
+              filename={`users-${activeTab}-${
+                new Date().toISOString().split("T")[0]
+              }.csv`}
+            >
+              Download CSV
+            </CSVLink>
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white">
@@ -256,11 +271,11 @@ const UserManagementPage = () => {
                     colSpan={role !== "OBSERVER" ? 6 : 5}
                     className="text-center py-10"
                   >
-                    Loading...
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((user) => (
+                users.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50">
                     <td className="py-4 px-6 font-medium text-gray-800">
                       {user.username}
@@ -289,6 +304,37 @@ const UserManagementPage = () => {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="mt-6 flex items-center justify-between">
+          <div className="text-sm text-gray-700">
+            Showing{" "}
+            <span className="font-medium">
+              {Math.min((currentPage - 1) * 10 + 1, totalCount)}
+            </span>{" "}
+            to{" "}
+            <span className="font-medium">
+              {Math.min(currentPage * 10, totalCount)}
+            </span>{" "}
+            of <span className="font-medium">{totalCount}</span> results
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={!hasPreviousPage}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft size={16} />
+              Previous
+            </button>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={!hasNextPage}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
       {isModalOpen && (

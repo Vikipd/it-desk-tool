@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Ticket, Comment, Card
+from .models import Ticket, Comment, Card, ActivityLog
 from accounts.models import User
 
 class UserSerializer(serializers.ModelSerializer):
@@ -92,30 +92,25 @@ class TicketCreateSerializer(serializers.ModelSerializer):
             'other_card_type_description': validated_data.get('other_card_type_description')
         }
         
-        if user.role == User.CLIENT:
-            ticket_data['assigned_to'] = user
-            ticket_data['assigned_at'] = timezone.now()
-        
         ticket = Ticket.objects.create(**ticket_data)
         return ticket
 
 class TicketDetailSerializer(serializers.ModelSerializer):
     created_by = UserSerializer(read_only=True)
+    assigned_to_details = UserSerializer(source='assigned_to', read_only=True)
     assigned_to = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role=User.TECHNICIAN), allow_null=True, required=False)
     card = CardSerializer(read_only=True)
     comments = CommentSerializer(many=True, read_only=True)
-    assigned_to_username = serializers.CharField(source='assigned_to.username', read_only=True, allow_null=True)
-
+    
     class Meta:
         model = Ticket
         fields = [
-            'id', 'ticket_id', 'created_by', 'assigned_to', 'assigned_to_username',
-            'card', 'comments', 'fault_description', 'priority', 'attachment', 
-            'other_card_type_description', 'status', 'created_at', 'updated_at', 
-            'assigned_at', 'in_progress_at', 'in_transit_at', 'under_repair_at', 
-            'on_hold_at', 'resolved_at', 'closed_at', 'sla_days'
+            'id', 'ticket_id', 'created_by', 'assigned_to', 'assigned_to_details', 'card', 'comments',
+            'fault_description', 'priority', 'attachment', 'other_card_type_description',
+            'status', 'created_at', 'updated_at', 'assigned_at', 'in_progress_at', 'in_transit_at', 
+            'under_repair_at', 'on_hold_at', 'resolved_at', 'closed_at', 'sla_days'
         ]
-        read_only_fields = ['ticket_id', 'created_at', 'updated_at', 'created_by']
+        read_only_fields = ['id', 'ticket_id', 'created_by', 'assigned_to_details', 'card', 'comments', 'created_at', 'updated_at']
 
 class StatusUpdateWithCommentSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Ticket.STATUS_CHOICES)
@@ -137,3 +132,10 @@ class StatusUpdateWithCommentSerializer(serializers.Serializer):
             setattr(ticket, timestamp_field, timezone.now())
         ticket.save()
         return ticket
+
+class ActivityLogSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = ActivityLog
+        fields = ['id', 'user', 'action', 'timestamp', 'target_object_id', 'details']

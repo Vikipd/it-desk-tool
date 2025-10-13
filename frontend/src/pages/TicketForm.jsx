@@ -1,4 +1,4 @@
-// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK. THE REDIRECT IS FIXED.
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -27,7 +27,7 @@ const ManualApiSelect = ({
     queryKey: ["filteredData", fieldName, queryParams],
     queryFn: () =>
       api
-        .get(`/api/cards/filtered-data/${fieldName}/`, { params: queryParams })
+        .get(`/api/tickets/card-data/${fieldName}/`, { params: queryParams })
         .then((res) => res.data),
     enabled: !isDisabled,
   });
@@ -70,13 +70,13 @@ function TicketForm() {
 
   const { data: zones, isLoading: isLoadingZones } = useQuery({
     queryKey: ["zones"],
-    queryFn: () => api.get("/api/cards/zones/").then((res) => res.data),
+    queryFn: () => api.get("/api/tickets/zones/").then((res) => res.data),
   });
   const { data: states, isLoading: isLoadingStates } = useQuery({
     queryKey: ["states", selectedZone],
     queryFn: () =>
       api
-        .get("/api/cards/states/", { params: { zone: selectedZone?.value } })
+        .get("/api/tickets/states/", { params: { zone: selectedZone?.value } })
         .then((res) => res.data),
     enabled: !!selectedZone,
   });
@@ -84,7 +84,7 @@ function TicketForm() {
     queryKey: ["nodeTypes", selectedState],
     queryFn: () =>
       api
-        .get("/api/cards/node-types/", {
+        .get("/api/tickets/node-types/", {
           params: { zone: selectedZone?.value, state: selectedState?.value },
         })
         .then((res) => res.data),
@@ -94,7 +94,7 @@ function TicketForm() {
     queryKey: ["locations", selectedNodeType],
     queryFn: () =>
       api
-        .get("/api/cards/locations/", {
+        .get("/api/tickets/locations/", {
           params: {
             zone: selectedZone?.value,
             state: selectedState?.value,
@@ -107,7 +107,7 @@ function TicketForm() {
   const { data: cardTypes, isLoading: isLoadingCardTypes } = useQuery({
     queryKey: ["cardTypes", selectedLocation],
     queryFn: async () => {
-      const res = await api.get("/api/cards/card-types/", {
+      const res = await api.get("/api/tickets/card-types/", {
         params: {
           zone: selectedZone?.value,
           state: selectedState?.value,
@@ -123,7 +123,7 @@ function TicketForm() {
     queryKey: ["slots", selectedCardType],
     queryFn: () =>
       api
-        .get("/api/cards/slots/", {
+        .get("/api/tickets/slots/", {
           params: {
             zone: selectedZone?.value,
             state: selectedState?.value,
@@ -146,7 +146,7 @@ function TicketForm() {
         card_type: selectedCardType.value,
         slot: selectedSlot.value,
       };
-      const res = await api.get("/api/cards/autofill/", { params });
+      const res = await api.get("/api/tickets/card-autofill/", { params });
       setAutofilledData(res.data);
       return res.data;
     },
@@ -238,7 +238,6 @@ function TicketForm() {
       await api.post("/api/tickets/", data);
       toast.success("Ticket created successfully!");
 
-      // --- MODIFICATION: THIS IS THE CORRECT, PROFESSIONAL REDIRECT LOGIC ---
       if (role === "CLIENT") {
         navigate("/client-dashboard");
       } else if (role === "TECHNICIAN") {
@@ -246,7 +245,7 @@ function TicketForm() {
       } else if (role === "ADMIN") {
         navigate("/admin-dashboard");
       } else {
-        navigate(-1); // Go back as a fallback
+        navigate(-1);
       }
     } catch (err) {
       const errorData = err.response?.data;

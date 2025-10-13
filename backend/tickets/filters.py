@@ -1,7 +1,7 @@
 # COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import django_filters
-from .models import Ticket
+from .models import Ticket, ActivityLog # Add ActivityLog
 from accounts.models import User # Import the User model to reference roles
 
 CARD_TYPE_GROUPS = {
@@ -48,3 +48,12 @@ class TicketFilter(django_filters.FilterSet):
             return queryset.exclude(card__card_type__in=known_types)
             
         return queryset
+
+class ActivityLogFilter(django_filters.FilterSet):
+    start_date = django_filters.DateFilter(field_name='timestamp', lookup_expr='date__gte')
+    end_date = django_filters.DateFilter(field_name='timestamp', lookup_expr='date__lte')
+
+    class Meta:
+        model = ActivityLog
+        fields = ['user', 'action', 'start_date', 'end_date']    
+    

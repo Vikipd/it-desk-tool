@@ -1,3 +1,5 @@
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
+
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -20,30 +22,30 @@ import "react-datepicker/dist/react-datepicker.css";
 import ActionModal from "../components/ActionModal.jsx";
 
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, children }) => {
-    if (!isOpen) return null;
-  
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
-        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-          <h2 className="text-xl font-bold text-gray-800">{title}</h2>
-          <div className="mt-4 text-gray-600">{children}</div>
-          <div className="mt-6 flex justify-end gap-4">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-            >
-              Confirm Delete
-            </button>
-          </div>
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center print:hidden">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+        <div className="mt-4 text-gray-600">{children}</div>
+        <div className="mt-6 flex justify-end gap-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+          >
+            Confirm Delete
+          </button>
         </div>
       </div>
-    );
+    </div>
+  );
 };
 
 const formatToIST = (dateString) => {
@@ -75,14 +77,14 @@ const DetailItem = ({ label, value, fullWidth = false }) => (
 );
 
 const Section = ({ title, children }) => (
-  <div className="bg-gray-50 p-6 rounded-lg shadow-sm print:shadow-none print:border print:border-gray-200 print:bg-white">
+  <div className="bg-gray-50 p-6 rounded-lg shadow-sm print:shadow-none print:border print:border-gray-200 print:bg-white print:p-4 print:mb-4">
     <h2 className="text-xl font-semibold mb-4 border-b pb-2">{title}</h2>
     {children}
   </div>
 );
 
 const CommentItem = ({ comment }) => (
-  <div className="p-4 bg-white rounded-lg border-l-4 border-blue-300 print:border-none print:bg-transparent print:p-0 print:mb-2">
+  <div className="p-4 bg-white rounded-lg border-l-4 border-blue-300 print:border-t print:border-gray-200 print:rounded-none print:border-l-0 print:bg-transparent print:p-0 print:pt-2 print:mb-2">
     <div className="flex justify-between text-sm">
       <p className="font-bold text-blue-800">{comment.author_username}</p>
       <p className="text-gray-500">{formatToIST(comment.created_at)}</p>
@@ -116,7 +118,7 @@ const EditableTimestampItem = ({ label, selected, onChange }) => (
 const AdminAssign = ({ ticket, onAssign }) => {
   const { data: engineers, isLoading } = useQuery({
     queryKey: ["engineers"],
-    queryFn: () => api.get("/api/technicians/").then((res) => res.data),
+    queryFn: () => api.get("/api/auth/technicians/").then((res) => res.data),
   });
   const engineerOptions =
     engineers?.map((e) => ({ value: e.id, label: e.username })) || [];
@@ -157,7 +159,6 @@ const AdminPriority = ({ ticket, onPriorityChange }) => {
     </Section>
   );
 };
-
 
 const EngineerActions = ({ ticket, onUpdate }) => {
   const { user } = useAuth();
@@ -329,19 +330,21 @@ const TicketDetail = () => {
     },
     onError: () => toast.error("Failed to update timestamps."),
   });
-  
+
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/api/tickets/${id}/`),
     onSuccess: () => {
-        toast.success(`Ticket #${ticket.ticket_id} has been permanently deleted.`);
-        queryClient.invalidateQueries({ queryKey: ["filteredTickets"] });
-        queryClient.invalidateQueries({ queryKey: ["adminDashboardData"] });
-        navigate('/admin-dashboard');
+      toast.success(
+        `Ticket #${ticket.ticket_id} has been permanently deleted.`
+      );
+      queryClient.invalidateQueries({ queryKey: ["filteredTickets"] });
+      queryClient.invalidateQueries({ queryKey: ["adminDashboardData"] });
+      navigate("/admin-dashboard");
     },
     onError: () => {
-        toast.error("Failed to delete the ticket.");
-        setIsDeleteModalOpen(false);
-    }
+      toast.error("Failed to delete the ticket.");
+      setIsDeleteModalOpen(false);
+    },
   });
 
   const handleCommentSubmit = (e) => {
@@ -368,10 +371,19 @@ const TicketDetail = () => {
     }, {});
     timestampMutation.mutate(payload);
   };
+
+  // --- THIS IS THE FIX ---
   const handlePrint = () => {
+    const originalTitle = document.title;
+    document.title = `Ticket_${ticket?.ticket_id || "Details"}`;
     window.print();
+    // Use a timeout to ensure the title is restored after the print dialog closes
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 500);
   };
-  
+  // --- END OF FIX ---
+
   const handleDeleteConfirm = () => {
     deleteMutation.mutate();
   };
@@ -399,6 +411,20 @@ const TicketDetail = () => {
   return (
     <>
       <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-sans print:bg-white">
+        <div className="hidden print-header">
+          <img
+            src="/assets/images/hfcl.png"
+            alt="HFCL Logo"
+            className="print-header-logo"
+          />
+          <div className="text-right">
+            <h1 className="print-header-title">Ticket Details</h1>
+            <p className="print-header-date">
+              Printed on: {new Date().toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+
         <div className="max-w-7xl mx-auto bg-white shadow-xl rounded-xl print:shadow-none">
           <div className="p-6 sm:p-8 border-b flex justify-between items-center print:hidden">
             <div className="flex items-center">
@@ -413,20 +439,20 @@ const TicketDetail = () => {
               </h1>
             </div>
             <div className="flex items-center gap-4">
-                {role === 'ADMIN' && (
-                    <button
-                        onClick={() => setIsDeleteModalOpen(true)}
-                        className="flex items-center text-sm font-semibold bg-red-100 text-red-700 px-3 py-2 rounded-lg hover:bg-red-600 hover:text-white"
-                    >
-                        <Trash2 size={16} className="mr-2" /> Delete Ticket
-                    </button>
-                )}
+              {role === "ADMIN" && (
                 <button
-                    onClick={handlePrint}
-                    className="flex items-center text-sm font-semibold bg-gray-200 text-gray-800 px-3 py-2 rounded-lg hover:bg-gray-300"
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className="flex items-center text-sm font-semibold bg-red-100 text-red-700 px-3 py-2 rounded-lg hover:bg-red-600 hover:text-white"
                 >
-                    <Printer size={16} className="mr-2" /> Print / Export PDF
+                  <Trash2 size={16} className="mr-2" /> Delete Ticket
                 </button>
+              )}
+              <button
+                onClick={handlePrint}
+                className="flex items-center text-sm font-semibold bg-gray-200 text-gray-800 px-3 py-2 rounded-lg hover:bg-gray-300"
+              >
+                <Printer size={16} className="mr-2" /> Print / Export PDF
+              </button>
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6 sm:p-8 print:grid-cols-1">
@@ -438,7 +464,10 @@ const TicketDetail = () => {
                     label="Serial Number"
                     value={cardDetails.serial_number}
                   />
-                  <DetailItem label="Primary IP" value={cardDetails.primary_ip} />
+                  <DetailItem
+                    label="Primary IP"
+                    value={cardDetails.primary_ip}
+                  />
                   <DetailItem label="AID" value={cardDetails.aid} />
                   <DetailItem
                     label="Unit Part Number"
@@ -457,11 +486,11 @@ const TicketDetail = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                   <DetailItem
                     label="Created By"
-                    value={ticket.created_by_username}
+                    value={ticket.created_by?.username}
                   />
                   <DetailItem
                     label="Assigned To"
-                    value={ticket.assigned_to_username}
+                    value={ticket.assigned_to_details?.username}
                   />
                   <DetailItem label="Priority" value={ticket.priority} />
                   <DetailItem label="Status" value={ticket.status} />
@@ -622,8 +651,13 @@ const TicketDetail = () => {
         onConfirm={handleDeleteConfirm}
         title="Confirm Deletion"
       >
-        <p>Are you sure you want to permanently delete ticket <strong>#{ticket?.ticket_id}</strong>?</p>
-        <p className="mt-2 text-sm font-semibold text-red-600">This action cannot be undone.</p>
+        <p>
+          Are you sure you want to permanently delete ticket{" "}
+          <strong>#{ticket?.ticket_id}</strong>?
+        </p>
+        <p className="mt-2 text-sm font-semibold text-red-600">
+          This action cannot be undone.
+        </p>
       </ConfirmationModal>
     </>
   );

@@ -15,6 +15,7 @@ import UserManagementPage from "./pages/UserManagementPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ContactsPage from "./pages/ContactsPage";
+import ActivityLogPage from "./pages/ActivityLogPage";
 
 const ProtectedRoute = ({ allowedRoles, children }) => {
   const { isAuthenticated, role } = useAuth();
@@ -22,7 +23,6 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
     return <Navigate to="/login" replace />;
   }
   if (role === "ADMIN") {
-    // Admins can access everything
     return children;
   }
   if (allowedRoles && !allowedRoles.includes(role)) {
@@ -108,6 +108,14 @@ function App() {
         element={
           <ProtectedRoute>
             <ContactsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/activity-log"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN", "OBSERVER"]}>
+            <ActivityLogPage />
           </ProtectedRoute>
         }
       />

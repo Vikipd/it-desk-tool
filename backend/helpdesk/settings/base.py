@@ -8,9 +8,6 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# --- THIS IS THE FIX ---
-# This simplified logic is more robust. The correct .env file (.env.local on Windows, 
-# .env.prod on the server) will be loaded by the correct startup command.
 load_dotenv()
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -69,6 +66,8 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
     "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
+    # --- THIS IS THE FIX ---
+    # This line MUST point to our custom serializer to get specific error messages.
     "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.MyTokenObtainPairSerializer",
 }
 
@@ -121,7 +120,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# This will be overridden in production.py for the server
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
 
 CORS_ALLOW_CREDENTIALS = True

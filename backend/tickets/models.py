@@ -1,10 +1,11 @@
+# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
+
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from accounts.models import User
 
 class Card(models.Model):
-    # ... (This model is unchanged)
     zone = models.CharField(max_length=100)
     state = models.CharField(max_length=100)
     node_type = models.CharField(max_length=100)
@@ -36,7 +37,6 @@ class Ticket(models.Model):
     ]
     PRIORITY_CHOICES = [('CRITICAL', 'Critical'), ('HIGH', 'High'), ('MEDIUM', 'Medium'), ('LOW', 'Low')]
 
-    # ... (Core fields are unchanged)
     ticket_id = models.CharField(max_length=20, unique=True, editable=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='submitted_tickets')
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets', limit_choices_to={'role': User.TECHNICIAN})
@@ -56,20 +56,13 @@ class Ticket(models.Model):
     resolved_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
 
-    # --- FINAL FIX FOR SLA DAYS ---
-    # This property calculates the SLA target based on priority.
-    # This is the single source of truth for your business logic.
     @property
     def sla_days(self):
-        if self.priority == 'CRITICAL':
-            return 3
-        elif self.priority == 'HIGH':
-            return 7
-        elif self.priority == 'MEDIUM':
-            return 14
-        elif self.priority == 'LOW':
-            return 21
-        return 30 # Default fallback
+        if self.priority == 'CRITICAL': return 3
+        elif self.priority == 'HIGH': return 7
+        elif self.priority == 'MEDIUM': return 14
+        elif self.priority == 'LOW': return 21
+        return 30
 
     def save(self, *args, **kwargs):
         if not self.pk:
@@ -82,7 +75,6 @@ class Ticket(models.Model):
         return self.ticket_id
 
 class Comment(models.Model):
-    # ... (This model is unchanged)
     text = models.TextField()
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='comments')
@@ -94,3 +86,27 @@ class Comment(models.Model):
 
     class Meta:
         ordering = ['created_at']
+
+# --- THIS IS THE NEW MODEL ---
+# In the ActivityLog model, add the `indexes` Meta option.
+
+class ActivityLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='activities')
+    action = models.CharField(max_length=50)
+    timestamp = models.DateTimeField(default=timezone.now)
+    target_object_id = models.CharField(max_length=100, null=True, blank=True)
+    details = models.TextField()
+
+    def __str__(self):
+        return f"{self.user.username} - {self.action} at {self.timestamp}"
+
+    class Meta:
+        ordering = ['-timestamp']
+        # --- THIS IS THE FIX ---
+        # Add indexes for faster filtering on these columns in the future.
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['action']),
+            models.Index(fields=['timestamp']),
+        ]
+        

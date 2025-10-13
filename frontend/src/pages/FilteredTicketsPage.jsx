@@ -19,29 +19,46 @@ function useQueryParams() {
   return new URLSearchParams(useLocation().search);
 }
 
-// --- THIS IS THE FIX (PART 1): The Dropdown is now a simple, "dumb" UI component ---
-const AssigneeDropdown = ({
-  technicians,
-  currentValue,
-  isLoading,
-  onChange,
-}) => {
+const AssigneeDropdown = ({ ticket, technicians, queryKey }) => {
+  const queryClient = useQueryClient();
   const technicianOptions = technicians.map((tech) => ({
     value: tech.id,
     label: tech.username,
   }));
 
-  const selectedOption = technicianOptions.find(
-    (opt) => opt.value === currentValue
+  const assignMutation = useMutation({
+    mutationFn: ({ ticketId, assigneeId }) =>
+      api.patch(`/api/tickets/${ticketId}/`, { assigned_to: assigneeId }),
+    onSuccess: (data) => {
+      toast.success(`Ticket ${data.data.ticket_id} has been assigned!`);
+      queryClient.invalidateQueries({ queryKey: queryKey });
+    },
+    onError: () => {
+      toast.error("Failed to assign ticket.");
+    },
+  });
+
+  const handleAssign = (selectedOption) => {
+    assignMutation.mutate({
+      ticketId: ticket.id,
+      assigneeId: selectedOption ? selectedOption.value : null,
+    });
+  };
+
+  const currentValue = technicianOptions.find(
+    (opt) => opt.value === ticket.assigned_to?.id
   );
 
   return (
     <div onClick={(e) => e.stopPropagation()}>
       <Select
         options={technicianOptions}
-        value={selectedOption}
-        onChange={(option) => onChange(option ? option.value : null)}
-        isLoading={isLoading}
+        value={currentValue}
+        onChange={handleAssign}
+        isLoading={
+          assignMutation.isPending &&
+          assignMutation.variables?.ticketId === ticket.id
+        }
         placeholder="Assign..."
         className="min-w-[150px] text-sm"
         isClearable={false}
@@ -69,7 +86,6 @@ const priorityDropdownOptions = [
 const FilteredTicketsPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const queryClient = useQueryClient();
   const { role } = useAuth();
   const urlQuery = useQueryParams();
 
@@ -102,7 +118,6 @@ const FilteredTicketsPage = () => {
     [statusFilter, priorityFilter, searchFilter]
   );
 
-  // This query key is now the single source of truth for the ticket list
   const queryKey = [
     "filteredTickets",
     currentPage,
@@ -114,20 +129,6 @@ const FilteredTicketsPage = () => {
   const { data: paginatedData, isLoading } = useQuery({
     queryKey: queryKey,
     queryFn: () => fetchTickets(currentPage),
-  });
-
-  // --- THIS IS THE FIX (PART 2): The mutation logic is moved to the main component ---
-  const assignMutation = useMutation({
-    mutationFn: ({ ticketId, assigneeId }) =>
-      api.patch(`/api/tickets/${ticketId}/`, { assigned_to: assigneeId }),
-    onSuccess: (data) => {
-      toast.success(`Ticket ${data.data.ticket_id} has been assigned!`);
-      // This is the most reliable way to update the list: invalidate the query and force a refetch.
-      queryClient.invalidateQueries({ queryKey: queryKey });
-    },
-    onError: () => {
-      toast.error("Failed to assign ticket.");
-    },
   });
 
   const tickets = paginatedData?.results || [];
@@ -149,7 +150,7 @@ const FilteredTicketsPage = () => {
         const profileRes = await api.get("/api/auth/me/");
         setUsername(profileRes.data.username);
         if (role === "ADMIN" || role === "OBSERVER") {
-          const techResponse = await api.get("/api/technicians/");
+          const techResponse = await api.get("/api/auth/technicians/");
           setTechnicians(techResponse.data);
         }
       } catch (err) {
@@ -366,13 +367,13 @@ const FilteredTicketsPage = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan="12" className="text-center py-10 text-gray-500">
+                <td colSpan="11" className="text-center py-10 text-gray-500">
                   Loading tickets...
                 </td>
               </tr>
             ) : tickets.length === 0 ? (
               <tr>
-                <td colSpan="12" className="text-center py-10 text-gray-500">
+                <td colSpan="11" className="text-center py-10 text-gray-500">
                   No tickets found.
                 </td>
               </tr>
@@ -410,25 +411,15 @@ const FilteredTicketsPage = () => {
                     </td>
                   )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                    {/* --- THIS IS THE FIX (PART 3): The rendering logic is now robust --- */}
                     {ticket.assigned_to?.username ? (
                       <span className="font-medium">
                         {ticket.assigned_to.username}
                       </span>
                     ) : role === "ADMIN" || role === "OBSERVER" ? (
                       <AssigneeDropdown
+                        ticket={ticket}
                         technicians={technicians}
-                        currentValue={ticket.assigned_to?.id}
-                        isLoading={
-                          assignMutation.isPending &&
-                          assignMutation.variables?.ticketId === ticket.id
-                        }
-                        onChange={(assigneeId) => {
-                          assignMutation.mutate({
-                            ticketId: ticket.id,
-                            assigneeId,
-                          });
-                        }}
+                        queryKey={queryKey}
                       />
                     ) : (
                       "Unassigned"

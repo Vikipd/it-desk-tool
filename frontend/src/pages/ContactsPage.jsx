@@ -15,7 +15,7 @@ const ContactsPage = () => {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["contacts", currentPage],
-    queryFn: () => api.get(`/api/contacts/?page=${currentPage}`),
+    queryFn: () => api.get(`/api/auth/contacts/?page=${currentPage}`),
     keepPreviousData: true,
   });
 
@@ -25,7 +25,7 @@ const ContactsPage = () => {
   const hasPreviousPage = data?.data?.previous !== null;
 
   const exportMutation = useMutation({
-      mutationFn: () => api.get("/api/contacts/export/"),
+      mutationFn: () => api.get("/api/auth/contacts/export/"),
       onSuccess: (response) => {
           const allContacts = response.data;
           if (!allContacts || allContacts.length === 0) { toast.error("No contacts to export."); return; }

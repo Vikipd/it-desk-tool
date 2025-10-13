@@ -21,6 +21,7 @@ from .serializers import (
 from .filters import TicketFilter, ActivityLogFilter # Add ActivityLogFilter
 from accounts.models import User
 from accounts.permissions import IsTechnicianRole
+from .permissions import IsAdminOrObserver
 from .activity_logger import log_activity
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -286,7 +287,7 @@ class CommentViewSet(viewsets.ModelViewSet):
 class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ActivityLog.objects.select_related('user').order_by('-timestamp')
     serializer_class = ActivityLogSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrObserver]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend]
     filterset_class = ActivityLogFilter

@@ -11,9 +11,12 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
+        # --- THIS IS THE FIX ---
+        # The login token must also be aware of the new 'zone' field.
         token['user_id'] = user.id
         token['role'] = user.role
         token['must_change_password'] = user.must_change_password
+        token['zone'] = user.zone
         return token
 
     def validate(self, attrs):
@@ -43,7 +46,6 @@ class UserCreateSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
     class Meta:
         model = User
-        # --- 'zone' ADDED TO FIELDS ---
         fields = ('username', 'password', 'password2', 'email', 'first_name', 'last_name', 'phone_number', 'role', 'zone')
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -65,7 +67,6 @@ class UserCreateSerializer(serializers.ModelSerializer):
             last_name=validated_data['last_name'],
             phone_number=validated_data.get('phone_number'),
             role=validated_data.get('role', User.CLIENT),
-            # --- 'zone' ADDED TO CREATE METHOD ---
             zone=validated_data.get('zone')
         )
         user.set_password(validated_data['password'])
@@ -98,7 +99,6 @@ class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     class Meta:
         model = User
-        # --- 'zone' ADDED TO FIELDS ---
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'full_name', 'phone_number', 'role', 'is_active', 'must_change_password', 'zone')
     def get_full_name(self, obj):
         return obj.get_full_name()

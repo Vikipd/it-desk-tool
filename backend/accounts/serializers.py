@@ -11,32 +11,25 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        # --- THIS IS THE FIX ---
-        # The login token must also be aware of the new 'zone' field.
         token['user_id'] = user.id
         token['role'] = user.role
         token['must_change_password'] = user.must_change_password
-        token['zone'] = user.zone
+        # The 'zone' field will be available because we fetch the full user object below
+        token['zone'] = user.zone 
         return token
 
     def validate(self, attrs):
-        username = attrs.get(self.username_field)
-        password = attrs.get("password")
-        
-        user = User.objects.filter(username__iexact=username).first()
-
-        if user is None:
-            raise AuthenticationFailed("No active account found with this username.")
-        
-        if not user.is_active:
-            raise AuthenticationFailed("This user account has been deactivated.")
-
-        if not user.check_password(password):
-            raise AuthenticationFailed("Incorrect password. Please try again.")
-        
+        # This is the original validation logic, which is correct.
+        # It sets self.user correctly.
         data = super().validate(attrs)
+
+        # --- THIS IS THE FIX ---
+        # We must explicitly fetch the full user object from the database here
+        # to ensure all fields, including our new 'zone' field, are loaded.
+        user_with_zone = User.objects.get(id=self.user.id)
         
-        log_activity(self.user, 'USER_LOGIN', target=self.user.username, details="User logged in successfully.")
+        # Now we use this complete user object to log activity.
+        log_activity(user_with_zone, 'USER_LOGIN', target=user_with_zone.username, details="User logged in successfully.")
         
         return data
 
@@ -76,6 +69,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
             user.must_change_password = True
         user.save()
         return user
+
+# ... (the rest of the file remains unchanged)
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)

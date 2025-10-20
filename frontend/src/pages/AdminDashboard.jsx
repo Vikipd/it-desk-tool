@@ -31,7 +31,6 @@ const DashboardCard = ({
   isActionCard = false,
   isUserCard = false,
 }) => {
-  // ... (This component is correct and remains unchanged) ...
   const cardClasses = isUserCard
     ? "bg-indigo-100 border-2 border-indigo-400"
     : isActionCard
@@ -78,17 +77,14 @@ const DashboardCard = ({
   return cardContent;
 };
 
-// --- THIS IS THE FIX (PART 2): REWRITTEN SLA CARD LOGIC ---
+// --- THIS IS THE FIX: The SLA Breached / SLA Met line has been removed ---
 const SlaPerformanceCard = ({
   priority,
   targetDays,
   avgOpenAge,
   openBreachedCount,
 }) => {
-  // Determine if the card should be in an "alert" state
   const hasBreachedTickets = openBreachedCount > 0;
-
-  // The main text to display is the average age of OPEN tickets.
   const displayDays = avgOpenAge;
 
   return (
@@ -99,17 +95,7 @@ const SlaPerformanceCard = ({
     >
       <div>
         <h3 className="font-bold text-gray-800 text-lg">{priority} Priority</h3>
-        {hasBreachedTickets ? (
-          <p className="text-sm font-semibold flex items-center mt-1 text-red-500">
-            <AlertTriangle className="mr-2" size={18} />
-            SLA Breached
-          </p>
-        ) : (
-          <p className="text-sm font-semibold flex items-center mt-1 text-green-500">
-            <CheckCircle className="mr-2" size={18} />
-            SLA Met
-          </p>
-        )}
+        {/* The "SLA Breached" and "SLA Met" <p> block was here and has been removed. */}
       </div>
 
       {hasBreachedTickets && (
@@ -140,7 +126,7 @@ const SlaPerformanceCard = ({
     </div>
   );
 };
-// --- END OF FIX (PART 2) ---
+// --- END OF FIX ---
 
 const COLORS = [
   "#0088FE",
@@ -150,7 +136,6 @@ const COLORS = [
   "#8884d8",
   "#ff6666",
 ];
-// ... (The rest of the file remains unchanged) ...
 const RADIAN = Math.PI / 180;
 const renderCustomizedLabel = ({
   cx,

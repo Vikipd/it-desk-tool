@@ -10,26 +10,31 @@ from tickets.activity_logger import log_activity
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
-        token = super().get_token(user)
-        token['user_id'] = user.id
-        token['role'] = user.role
-        token['must_change_password'] = user.must_change_password
-        # The 'zone' field will be available because we fetch the full user object below
-        token['zone'] = user.zone 
+        # --- THIS IS THE FINAL, CORRECT FIX ---
+        # The 'user' object passed here is lazy. We must fetch the full object
+        # from the database to guarantee access to all custom fields like 'zone'.
+        try:
+            full_user = User.objects.get(id=user.id)
+        except User.DoesNotExist:
+            # This should not happen in a normal login flow, but is safe to have.
+            raise AuthenticationFailed("User not found during token generation.")
+
+        token = super().get_token(full_user)
+        
+        # Now, populate the token using the complete user object.
+        token['user_id'] = full_user.id
+        token['role'] = full_user.role
+        token['must_change_password'] = full_user.must_change_password
+        token['zone'] = full_user.zone
         return token
 
     def validate(self, attrs):
-        # This is the original validation logic, which is correct.
-        # It sets self.user correctly.
+        # The parent's validate method correctly handles authentication
+        # and sets `self.user`.
         data = super().validate(attrs)
-
-        # --- THIS IS THE FIX ---
-        # We must explicitly fetch the full user object from the database here
-        # to ensure all fields, including our new 'zone' field, are loaded.
-        user_with_zone = User.objects.get(id=self.user.id)
         
-        # Now we use this complete user object to log activity.
-        log_activity(user_with_zone, 'USER_LOGIN', target=user_with_zone.username, details="User logged in successfully.")
+        # The `self.user` object is available here for logging.
+        log_activity(self.user, 'USER_LOGIN', target=self.user.username, details="User logged in successfully.")
         
         return data
 
@@ -70,7 +75,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
-# ... (the rest of the file remains unchanged)
+# ... (the rest of the file remains unchanged and is correct)
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)

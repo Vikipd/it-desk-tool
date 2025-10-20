@@ -24,17 +24,15 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
-# --- THIS IS THE NEW MODEL ---
+# --- THIS IS THE MODIFIED MODEL ---
 class Contact(models.Model):
+    circle = models.CharField(max_length=100)
     name = models.CharField(max_length=200)
-    role = models.CharField(max_length=100)
-    zone = models.CharField(max_length=100)
-    state = models.CharField(max_length=100)
-    mobile = models.CharField(max_length=20)
+    mobile_number = models.CharField(max_length=20)
     email = models.EmailField()
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.circle})"
 
     class Meta:
-        ordering = ['name']
+        ordering = ['circle']

@@ -51,12 +51,13 @@ class ChangePasswordView(generics.UpdateAPIView):
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
 
-# --- THIS IS THE FIX ---
 class UserListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdminOrReadOnly]
-    pagination_class = StandardResultsSetPagination  # Add pagination
-    filter_backends = [filters.SearchFilter]        # Add search
-    search_fields = ['username', 'first_name', 'last_name', 'email', 'phone_number', 'role']
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [filters.SearchFilter]
+    # --- THIS IS THE FIX ---
+    # Added 'zone' to the list of fields that can be searched.
+    search_fields = ['username', 'first_name', 'last_name', 'email', 'phone_number', 'role', 'zone']
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -66,7 +67,6 @@ class UserListCreateView(generics.ListCreateAPIView):
         is_active_param = self.request.query_params.get('is_active', 'true')
         is_active = is_active_param.lower() == 'true'
         return User.objects.filter(is_active=is_active).order_by('username')
-# --- END OF FIX ---
 
 class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
@@ -118,12 +118,11 @@ class TechnicianListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
 class ContactListView(generics.ListAPIView):
-    queryset = Contact.objects.order_by('name')
+    queryset = Contact.objects.all()
     serializer_class = ContactSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = StandardResultsSetPagination
 
 class ContactExportView(generics.ListAPIView):
-    queryset = Contact.objects.order_by('name')
+    queryset = Contact.objects.all()
     serializer_class = ContactSerializer
     permission_classes = [permissions.IsAuthenticated]

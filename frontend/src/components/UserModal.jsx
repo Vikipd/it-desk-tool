@@ -1,10 +1,14 @@
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import Select from "react-select";
 import { X, Eye, EyeOff, KeyRound } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../api";
+
+const formatOptions = (data) =>
+  data ? data.map((item) => ({ value: item, label: item })) : [];
 
 const UserModal = ({ user, onClose, onSave }) => {
   const isEditMode = Boolean(user);
@@ -13,12 +17,14 @@ const UserModal = ({ user, onClose, onSave }) => {
     first_name: "",
     last_name: "",
     username: "",
-    email: "", // <-- MODIFICATION: ADDED EMAIL
+    email: "",
     phone_number: "",
     role: "CLIENT",
     password: "",
     password2: "",
   });
+
+  const [selectedZone, setSelectedZone] = useState(null);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -28,18 +34,28 @@ const UserModal = ({ user, onClose, onSave }) => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
 
+  const { data: zones, isLoading: isLoadingZones } = useQuery({
+    queryKey: ["zones"],
+    queryFn: () => api.get("/api/tickets/zones/").then((res) => res.data),
+  });
+
   useEffect(() => {
-    if (isEditMode) {
+    if (isEditMode && user) {
       setFormData({
         first_name: user.first_name || "",
         last_name: user.last_name || "",
         username: user.username || "",
-        email: user.email || "", // <-- MODIFICATION: ADDED EMAIL
+        email: user.email || "",
         phone_number: user.phone_number || "",
         role: user.role || "CLIENT",
         password: "",
         password2: "",
       });
+      if (user.zone) {
+        setSelectedZone({ value: user.zone, label: user.zone });
+      } else {
+        setSelectedZone(null);
+      }
     }
   }, [user, isEditMode]);
 
@@ -50,18 +66,19 @@ const UserModal = ({ user, onClose, onSave }) => {
 
   const { mutate, isPending: isLoading } = useMutation({
     mutationFn: async (userData) => {
+      const payload = {
+        ...userData,
+        zone: selectedZone ? selectedZone.value : null,
+      };
+
       if (isEditMode) {
-        const payload = {
-          username: userData.username,
-          first_name: userData.first_name,
-          last_name: userData.last_name,
-          email: userData.email, // <-- MODIFICATION: ADDED EMAIL
-          phone_number: userData.phone_number,
-          role: userData.role,
-        };
-        return api.put(`/api/users/${user.id}/`, payload);
+        delete payload.password;
+        delete payload.password2;
+        // --- THIS IS THE FIX for EDIT ---
+        return api.put(`/api/auth/users/${user.id}/`, payload);
       } else {
-        return api.post("/api/users/", userData);
+        // --- THIS IS THE FIX for CREATE ---
+        return api.post("/api/auth/users/", payload);
       }
     },
     onSuccess: () => {
@@ -78,7 +95,7 @@ const UserModal = ({ user, onClose, onSave }) => {
           const message = Array.isArray(errorData[key])
             ? errorData[key].join(" ")
             : errorData[key];
-          toast.error(`${key.replace("_", " ")}: ${message}`);
+          toast.error(`${key.replace(/_/g, " ")}: ${message}`);
         });
       } else {
         toast.error("An unexpected error occurred. Please try again.");
@@ -88,7 +105,7 @@ const UserModal = ({ user, onClose, onSave }) => {
 
   const { mutate: resetPassword, isPending: isResetting } = useMutation({
     mutationFn: (passwordData) =>
-      api.put(`/api/users/${user.id}/reset-password/`, passwordData),
+      api.post(`/api/auth/users/${user.id}/reset-password/`, passwordData),
     onSuccess: () => {
       toast.success("Password reset successfully!");
       setShowPasswordReset(false);
@@ -111,6 +128,7 @@ const UserModal = ({ user, onClose, onSave }) => {
     }
     mutate(formData);
   };
+
   const handlePasswordReset = () => {
     if (newPassword !== confirmNewPassword) {
       toast.error("New passwords do not match.");
@@ -171,7 +189,6 @@ const UserModal = ({ user, onClose, onSave }) => {
               title="Please enter a 10-digit phone number."
             />
           </div>
-          {/* --- MODIFICATION: EMAIL FIELD ADDED --- */}
           <InputField
             label="Email Address"
             name="email"
@@ -181,22 +198,37 @@ const UserModal = ({ user, onClose, onSave }) => {
             required
             placeholder="e.g., user@example.com"
           />
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Select role
-            </label>
-            <select
-              name="role"
-              value={formData.role}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500"
-            >
-              <option value="CLIENT">Client</option>
-              <option value="TECHNICIAN">Engineer</option>
-              <option value="ADMIN">Admin</option>
-              <option value="OBSERVER">Project Manager</option>
-            </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Select role<span className="text-red-500">*</span>
+              </label>
+              <select
+                name="role"
+                value={formData.role}
+                onChange={handleChange}
+                required
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500"
+              >
+                <option value="CLIENT">Client</option>
+                <option value="TECHNICIAN">Engineer</option>
+                <option value="ADMIN">Admin</option>
+                <option value="OBSERVER">Project Manager</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Select Zone
+              </label>
+              <Select
+                value={selectedZone}
+                onChange={setSelectedZone}
+                options={formatOptions(zones)}
+                isLoading={isLoadingZones}
+                placeholder="Select Zone..."
+                className="mt-1"
+              />
+            </div>
           </div>
           {isEditMode && !showPasswordReset && (
             <div className="pt-2">

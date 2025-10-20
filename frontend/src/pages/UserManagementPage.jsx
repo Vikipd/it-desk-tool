@@ -117,11 +117,13 @@ const UserManagementPage = () => {
     }
   };
 
+  // --- THIS IS A FIX: ADDED ZONE TO CSV EXPORT ---
   const csvHeaders = [
     { label: "Username", key: "username" },
     { label: "Full Name", key: "full_name" },
     { label: "Email", key: "email" },
     { label: "Role", key: "role" },
+    { label: "Zone", key: "zone" },
     { label: "Phone Number", key: "phone_number" },
   ];
   const csvData = users.map((user) => ({
@@ -129,6 +131,7 @@ const UserManagementPage = () => {
     full_name: user.full_name || `${user.first_name} ${user.last_name}`.trim(),
     email: user.email || "--",
     role: roleDisplayMap[user.role] || user.role,
+    zone: user.zone || "--",
     phone_number: user.phone_number || "--",
   }));
 
@@ -212,7 +215,8 @@ const UserManagementPage = () => {
           <div className="relative">
             <input
               type="text"
-              placeholder="Search by name, username, email, role, phone..."
+              // --- THIS IS A FIX: UPDATED PLACEHOLDER ---
+              placeholder="Search by name, username, email, role, phone, zone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 pr-4 py-2 border rounded-lg w-96 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -254,6 +258,10 @@ const UserManagementPage = () => {
                 <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                   Role
                 </th>
+                {/* --- THIS IS THE FIX: ADDED ZONE HEADER --- */}
+                <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
+                  Zone
+                </th>
                 <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                   Phone
                 </th>
@@ -268,7 +276,7 @@ const UserManagementPage = () => {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={role !== "OBSERVER" ? 6 : 5}
+                    colSpan={role !== "OBSERVER" ? 7 : 6}
                     className="text-center py-10"
                   >
                     <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
@@ -288,6 +296,10 @@ const UserManagementPage = () => {
                     </td>
                     <td className="py-4 px-6 text-gray-600">
                       {roleDisplayMap[user.role] || user.role}
+                    </td>
+                    {/* --- THIS IS THE FIX: ADDED ZONE DATA CELL --- */}
+                    <td className="py-4 px-6 text-gray-600">
+                      {user.zone || "--"}
                     </td>
                     <td className="py-4 px-6 text-gray-600">
                       {user.phone_number || "--"}

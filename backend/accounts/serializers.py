@@ -3,10 +3,14 @@
 
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth import get_user_model
 from .models import User, Contact
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
-from tickets.activity_logger import log_activity 
+from tickets.activity_logger import log_activity
+
+# Get the custom User model
+UserModel = get_user_model()
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
@@ -28,13 +32,39 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
+        # --- MODIFICATION START ---
+        # We are overriding the default validate method to provide more specific error messages.
+        username = attrs.get(self.username_field)
+        password = attrs.get("password")
+
+        user = None
+        try:
+            # First, check if a user with the given username exists.
+            user = UserModel.objects.get(username__iexact=username)
+        except UserModel.DoesNotExist:
+            # If the user does not exist, raise a specific error.
+            raise AuthenticationFailed("Invalid username. Please try again.")
+
+        # If the user exists, now check if the password is correct.
+        if user and not user.check_password(password):
+            # If the password is not valid, raise a specific error.
+            raise AuthenticationFailed("Incorrect password. Please try again.")
+        
+        # Now check if the user is active.
+        if not user.is_active:
+             raise AuthenticationFailed("This user account has been deactivated.")
+        
+        # If both username and password are correct, proceed with the default validation
+        # to generate the tokens.
         data = super().validate(attrs)
         
-        # This is the final, correct place to log the login action.
+        # Log the successful login action.
         if hasattr(self, 'user'):
             log_activity(user=self.user, action='USER_LOGIN', request=self.request, target=self.user.username, details="User logged in successfully.")
             
         return data
+        # --- MODIFICATION END ---
+
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])

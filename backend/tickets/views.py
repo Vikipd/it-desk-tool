@@ -18,7 +18,7 @@ from .serializers import (
     StatusUpdateWithCommentSerializer,
     ActivityLogSerializer
 )
-from .filters import TicketFilter, ActivityLogFilter # Add ActivityLogFilter
+from .filters import TicketFilter, ActivityLogFilter
 from accounts.models import User
 from accounts.permissions import IsTechnicianRole
 from .permissions import IsAdminOrObserver
@@ -39,9 +39,17 @@ class StateListView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get(self, request):
         zone = request.query_params.get('zone')
-        if not zone: return Response([])
-        states = Card.objects.filter(zone=zone).values_list('state', flat=True).distinct().order_by('state')
+        
+        # --- THIS IS THE FIX ---
+        # If a zone is provided, filter by it. Otherwise, get all states.
+        if zone:
+            queryset = Card.objects.filter(zone=zone)
+        else:
+            queryset = Card.objects.all()
+        
+        states = queryset.values_list('state', flat=True).distinct().order_by('state')
         return Response(states)
+# --- END OF FIX ---
 
 class NodeTypeListView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -106,8 +114,6 @@ class FilteredCardDataView(views.APIView):
         return Response(values)
 
 class TicketViewSet(viewsets.ModelViewSet):
-    # --- THIS IS THE FIX ---
-    # The base queryset is now explicitly ordered, which is required for stable pagination.
     queryset = Ticket.objects.select_related('created_by', 'assigned_to', 'card').order_by('-created_at')
     
     permission_classes = [permissions.IsAuthenticated]
@@ -251,7 +257,6 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='export-all')
     def export_all(self, request):
         queryset = self.filter_queryset(self.get_queryset())
-        # Use the list serializer for exports to ensure consistent data
         serializer = TicketListSerializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -278,12 +283,6 @@ class CommentViewSet(viewsets.ModelViewSet):
         except Ticket.DoesNotExist:
             raise serializers.ValidationError("Ticket not found.")
 
-# COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
-
-# ... (all imports are the same as the last correct version)
-
-# ... (All classes before ActivityLogViewSet are the same as the last correct version) ...
-
 class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ActivityLog.objects.select_related('user').order_by('-timestamp')
     serializer_class = ActivityLogSerializer
@@ -292,11 +291,8 @@ class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = ActivityLogFilter
 
-    # --- THIS IS THE FIX ---
     @action(detail=False, methods=['get'], url_path='export')
     def export(self, request):
-        # We apply the same filters as the list view, but without pagination
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
-    # --- END OF FIX ---

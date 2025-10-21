@@ -110,23 +110,16 @@ class TicketDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'ticket_id', 'created_by', 'assigned_to_details', 'card', 'comments', 'created_at', 'updated_at']
         
-    # --- THIS IS THE FIX ---
-    # This method automatically handles the `assigned_at` timestamp whenever a ticket is assigned.
     def update(self, instance, validated_data):
-        # Check if the 'assigned_to' field is being changed in this update.
         if 'assigned_to' in validated_data:
             new_assignee = validated_data.get('assigned_to')
             
-            # Only update the timestamp if the assignee has actually changed.
             if instance.assigned_to != new_assignee:
                 if new_assignee is not None:
-                    # If a new engineer is assigned, set the current time.
                     instance.assigned_at = timezone.now()
                 else:
-                    # If the ticket is unassigned, clear the timestamp.
                     instance.assigned_at = None
         
-        # Continue with the standard update process for all fields.
         return super().update(instance, validated_data)
 
 class StatusUpdateWithCommentSerializer(serializers.Serializer):
@@ -140,7 +133,10 @@ class StatusUpdateWithCommentSerializer(serializers.Serializer):
         new_status = self.validated_data['status']
         comment_text = self.validated_data['comment']
         
+        # --- THIS IS THE FIX ---
+        # The 'user' argument was missing from this function call. We have added it back.
         log_activity(
+            user=user, # This was the missing piece.
             request=request,
             action='STATUS_CHANGED',
             target=ticket.ticket_id,

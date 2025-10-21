@@ -6,26 +6,27 @@ from .base import *
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-# --- MODIFICATION START: CORRECT PRODUCTION DOMAINS ---
+# --- MODIFICATION START: CORRECT AND FORTIFY PRODUCTION DOMAINS ---
 
-# Explicitly define the allowed hosts for your production domain.
-# CORRECTED to use the .io domain.
+# Add ALL possible production domains to the allowed hosts list.
 ALLOWED_HOSTS = [
+    'www.hfclotnph4fbportal.in',
+    'hfclotnph4fbportal.in',
     'www.hfclotnph4fbportal.io',
     'hfclotnph4fbportal.io',
-    '139.59.68.36', # It's good practice to keep the IP address
+    '139.59.68.36', # Keep the server IP address
 ]
 
-# Explicitly define the frontend origins that are allowed to make API requests.
-# This is the fix for the CORS error.
-# CORRECTED to use the .io domain.
+# Add ALL possible frontend origins that are allowed to make API requests.
+# This ensures that no matter which domain you use, the CORS policy will pass.
 CORS_ALLOWED_ORIGINS = [
+    'https://www.hfclotnph4fbportal.in',
+    'https://hfclotnph4fbportal.in',
     'https://www.hfclotnph4fbportal.io',
     'https://hfclotnph4fbportal.io',
 ]
 
-# Production-level security settings. It's recommended to uncomment these
-# once you are sure everything is working correctly with HTTPS.
+# Production-level security settings.
 # SECURE_SSL_REDIRECT = True
 # SESSION_COOKIE_SECURE = True
 # CSRF_COOKIE_SECURE = True

@@ -1,11 +1,11 @@
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
-import React, { useState } from "react";
+import React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 import api from "../api";
 import DashboardLayout from "../layouts/DashboardLayout";
-import { Loader2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 
 const ContactsPage = () => {
   const { data: profileData } = useQuery({
@@ -13,21 +13,20 @@ const ContactsPage = () => {
     queryFn: () => api.get("/api/auth/me/"),
   });
   const username = profileData?.data?.username || "";
-  
-  const [currentPage, setCurrentPage] = useState(1);
 
-  const { data: contactsData, isLoading, error } = useQuery({
-    queryKey: ["contacts", currentPage],
-    queryFn: () => api.get(`/api/auth/contacts/?page=${currentPage}`),
-    keepPreviousData: true,
+  const {
+    data: contactsData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["contacts"],
+    queryFn: () => api.get("/api/auth/contacts/"),
   });
 
-  // --- THIS IS THE FIX ---
-  // We now correctly access the .results array inside the paginated response.
-  const contacts = contactsData?.data?.results || [];
-  const totalCount = contactsData?.data?.count || 0;
-  const hasNextPage = contactsData?.data?.next !== null;
-  const hasPreviousPage = contactsData?.data?.previous !== null;
+  // --- THIS IS THE FINAL, CORRECT FIX ---
+  // The API returns a simple array, not a paginated object.
+  // We must read the data directly.
+  const contacts = contactsData?.data || [];
   // --- END OF FIX ---
 
   const exportMutation = useMutation({
@@ -38,6 +37,7 @@ const ContactsPage = () => {
         toast.error("No contacts to export.");
         return;
       }
+
       toast.success("Generating CSV...");
       const headers = ["S.No", "Circle", "Name", "Contact Number", "Email"];
       const rows = allContacts.map((contact, index) =>
@@ -50,7 +50,9 @@ const ContactsPage = () => {
         ].join(",")
       );
       const csvContent = [headers.join(","), ...rows].join("\n");
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const blob = new Blob([csvContent], {
+        type: "text/csv;charset=utf-8;",
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -61,8 +63,6 @@ const ContactsPage = () => {
     },
     onError: () => toast.error("Failed to export contacts."),
   });
-
-  const contactsPerPage = 10;
 
   return (
     <DashboardLayout
@@ -88,11 +88,11 @@ const ContactsPage = () => {
             ) : error ? (
               <tr><td colSpan="5" className="text-center py-10 text-red-500"><AlertTriangle className="h-8 w-8 mx-auto" /> Failed to load contacts.</td></tr>
             ) : contacts.length === 0 ? (
-              <tr><td colSpan="5" className="text-center py-10 text-gray-500">No contacts found.</td></tr>
+              <tr><td colSpan="5" className="py-10 text-center text-gray-500">No contacts found.</td></tr>
             ) : (
               contacts.map((contact, index) => (
                 <tr key={contact.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(currentPage - 1) * contactsPerPage + index + 1}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{index + 1}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{contact.circle}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{contact.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{contact.mobile_number}</td>
@@ -103,13 +103,7 @@ const ContactsPage = () => {
           </tbody>
         </table>
       </div>
-      <div className="mt-6 flex items-center justify-between">
-        <div className="text-sm text-gray-700">Showing <span className="font-medium">{Math.min((currentPage - 1) * contactsPerPage + 1, totalCount)}</span> to <span className="font-medium">{Math.min(currentPage * contactsPerPage, totalCount)}</span> of <span className="font-medium">{totalCount}</span> results</div>
-        <div className="flex items-center gap-2">
-            <button onClick={() => setCurrentPage(p => p - 1)} disabled={!hasPreviousPage || isLoading} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"><ChevronLeft size={16} />Previous</button>
-            <button onClick={() => setCurrentPage(p => p + 1)} disabled={!hasNextPage || isLoading} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Next<ChevronRight size={16} /></button>
-        </div>
-      </div>
+      {/* --- PAGINATION REMOVED AS IT IS NOT NEEDED --- */}
     </DashboardLayout>
   );
 };

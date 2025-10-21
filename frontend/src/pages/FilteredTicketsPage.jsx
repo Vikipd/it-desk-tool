@@ -19,6 +19,10 @@ function useQueryParams() {
   return new URLSearchParams(useLocation().search);
 }
 
+// --- MODIFICATION: ADDED HELPER FUNCTION ---
+const formatOptions = (data) =>
+  data ? data.map((item) => ({ value: item, label: item })) : [];
+
 const AssigneeDropdown = ({ ticket, technicians, queryKey }) => {
   const queryClient = useQueryClient();
   const technicianOptions = technicians.map((tech) => ({
@@ -101,8 +105,17 @@ const FilteredTicketsPage = () => {
   const [searchFilter, setSearchFilter] = useState(
     urlQuery.get("search") || ""
   );
+  // --- MODIFICATION: ADDED STATE FOR STATE FILTER ---
+  const [stateFilter, setStateFilter] = useState(urlQuery.get("state") || "");
   const [technicians, setTechnicians] = useState([]);
   const [username, setUsername] = useState("");
+
+  // --- MODIFICATION: ADDED QUERY TO FETCH STATES ---
+  const { data: states, isLoading: isLoadingStates } = useQuery({
+    queryKey: ["states"],
+    queryFn: () => api.get("/api/tickets/states/").then((res) => res.data),
+  });
+  const stateDropdownOptions = formatOptions(states);
 
   const fetchTickets = useCallback(
     async (page) => {
@@ -111,11 +124,14 @@ const FilteredTicketsPage = () => {
         status: statusFilter || undefined,
         priority: priorityFilter || undefined,
         search: searchFilter || undefined,
+        // --- MODIFICATION: ADDED STATE TO PARAMS ---
+        state: stateFilter || undefined,
       };
       const res = await api.get("/api/tickets/", { params });
       return res.data;
     },
-    [statusFilter, priorityFilter, searchFilter]
+    // --- MODIFICATION: ADDED STATEFILTER TO DEPENDENCY ARRAY ---
+    [statusFilter, priorityFilter, searchFilter, stateFilter]
   );
 
   const queryKey = [
@@ -124,6 +140,8 @@ const FilteredTicketsPage = () => {
     statusFilter,
     priorityFilter,
     searchFilter,
+    // --- MODIFICATION: ADDED STATEFILTER TO QUERY KEY ---
+    stateFilter,
   ];
 
   const { data: paginatedData, isLoading } = useQuery({
@@ -141,6 +159,8 @@ const FilteredTicketsPage = () => {
     setStatusFilter(params.get("status") || "");
     setPriorityFilter(params.get("priority") || "");
     setSearchFilter(params.get("search") || "");
+    // --- MODIFICATION: ADDED STATE TO URL SYNC ---
+    setStateFilter(params.get("state") || "");
     setCurrentPage(parseInt(params.get("page")) || 1);
   }, [location.search]);
 
@@ -166,6 +186,8 @@ const FilteredTicketsPage = () => {
         status: statusFilter || undefined,
         priority: priorityFilter || undefined,
         search: searchFilter || undefined,
+        // --- MODIFICATION: ADDED STATE TO EXPORT PARAMS ---
+        state: stateFilter || undefined,
       };
       return api.get("/api/tickets/export-all/", { params });
     },
@@ -200,6 +222,7 @@ const FilteredTicketsPage = () => {
         "Status",
         "Priority",
         "Zone",
+        "State", // <-- ADDED STATE TO CSV
         "Created By",
         "Assigned To",
         "Created At",
@@ -216,6 +239,7 @@ const FilteredTicketsPage = () => {
           `"${ticket.status}"`,
           `"${ticket.priority}"`,
           `"${ticket.card?.zone || ""}"`,
+          `"${ticket.card?.state || ""}"`, // <-- ADDED STATE TO CSV
           `"${ticket.created_by?.username || ""}"`,
           `"${ticket.assigned_to?.username || "Unassigned"}"`,
           `"${new Date(ticket.created_at).toLocaleString()}"`,
@@ -281,8 +305,9 @@ const FilteredTicketsPage = () => {
       headerActions={headerActions}
     >
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-          <div className="md:col-span-1 relative">
+        {/* --- MODIFICATION: UPDATED GRID FOR 4 ITEMS --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
+          <div className="lg:col-span-1 relative">
             <input
               type="text"
               placeholder="Search by Ticket ID, Node, Status, Priority..."
@@ -321,6 +346,19 @@ const FilteredTicketsPage = () => {
             isClearable={true}
             placeholder="Select Priority"
           />
+          {/* --- MODIFICATION: ADDED STATE DROPDOWN --- */}
+          <Select
+            options={stateDropdownOptions}
+            isLoading={isLoadingStates}
+            value={stateDropdownOptions.find(
+              (opt) => opt.value === stateFilter
+            )}
+            onChange={(option) =>
+              handleFilterChange("state", option ? option.value : "")
+            }
+            isClearable={true}
+            placeholder="Select State..."
+          />
         </div>
       </div>
       <div className="overflow-x-auto bg-white rounded-lg shadow-md">
@@ -348,6 +386,10 @@ const FilteredTicketsPage = () => {
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Zone
               </th>
+              {/* --- MODIFICATION: ADDED STATE HEADER --- */}
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                State
+              </th>
               {(role === "ADMIN" || role === "OBSERVER") && (
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Created By
@@ -367,13 +409,13 @@ const FilteredTicketsPage = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan="11" className="text-center py-10 text-gray-500">
+                <td colSpan="12" className="text-center py-10 text-gray-500">
                   Loading tickets...
                 </td>
               </tr>
             ) : tickets.length === 0 ? (
               <tr>
-                <td colSpan="11" className="text-center py-10 text-gray-500">
+                <td colSpan="12" className="text-center py-10 text-gray-500">
                   No tickets found.
                 </td>
               </tr>
@@ -404,6 +446,10 @@ const FilteredTicketsPage = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.card?.zone || "N/A"}
+                  </td>
+                  {/* --- MODIFICATION: ADDED STATE DATA CELL --- */}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                    {ticket.card?.state || "N/A"}
                   </td>
                   {(role === "ADMIN" || role === "OBSERVER") && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">

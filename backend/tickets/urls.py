@@ -1,3 +1,4 @@
+# Path: E:\it-admin-tool\backend\tickets\urls.py
 # COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from django.urls import path
@@ -7,14 +8,8 @@ from .views import (
     TicketViewSet, CommentViewSet, ActivityLogViewSet
 )
 
-ticket_list = TicketViewSet.as_view({'get': 'list', 'post': 'create'})
-ticket_detail = TicketViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'})
-ticket_dashboard_stats = TicketViewSet.as_view({'get': 'dashboard_stats'})
-ticket_export = TicketViewSet.as_view({'get': 'export_all'})
-comment_list = CommentViewSet.as_view({'get': 'list', 'post': 'create'})
-activity_log_list = ActivityLogViewSet.as_view({'get': 'list'})
-# --- THIS IS THE FIX ---
-activity_log_export = ActivityLogViewSet.as_view({'get': 'export'})
+# This is a restoration of your original, working URL structure, plus the one required fix.
+# There are no routers. Every URL is manually and explicitly defined.
 
 urlpatterns = [
     # Dropdown URLs
@@ -27,18 +22,21 @@ urlpatterns = [
     path('card-autofill/', CardAutofillView.as_view(), name='card-autofill'),
     path('card-data/<str:field_name>/', FilteredCardDataView.as_view(), name='filtered-card-data'),
 
-    # Custom Action URLs
-    path('dashboard-stats/', ticket_dashboard_stats, name='ticket-dashboard-stats'),
-    path('export-all/', ticket_export, name='ticket-export-all'),
+    # Custom Ticket Action URLs
+    path('dashboard-stats/', TicketViewSet.as_view({'get': 'dashboard_stats'}), name='ticket-dashboard-stats'),
+    path('export-all/', TicketViewSet.as_view({'get': 'export_all'}), name='ticket-export-all'),
 
     # Main Ticket CRUD URLs
-    path('', ticket_list, name='ticket-list'),
-    path('<int:pk>/', ticket_detail, name='ticket-detail'),
+    path('', TicketViewSet.as_view({'get': 'list', 'post': 'create'}), name='ticket-list'),
+    path('<int:pk>/', TicketViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='ticket-detail'),
+    path('<int:pk>/edit-timestamps/', TicketViewSet.as_view({'patch': 'edit_timestamps'}), name='ticket-edit-timestamps'),
+    path('<int:pk>/update-status-with-comment/', TicketViewSet.as_view({'post': 'update_status_with_comment'}), name='ticket-update-status-with-comment'),
 
     # Nested Comment URLs
-    path('<int:ticket_pk>/comments/', comment_list, name='ticket-comments-list'),
+    path('<int:ticket_pk>/comments/', CommentViewSet.as_view({'get': 'list', 'post': 'create'}), name='ticket-comments-list'),
 
+    # --- THIS IS THE ONE AND ONLY FIX THAT WAS EVER NEEDED ---
     # Activity Log URLs
-    path('activity-log/', activity_log_list, name='activity-log-list'),
-    path('activity-log/export/', activity_log_export, name='activity-log-export'),
+    path('activity-log/', ActivityLogViewSet.as_view({'get': 'list'}), name='activity-log-list'),
+    path('activity-log/export/', ActivityLogViewSet.as_view({'get': 'export'}), name='activity-log-export'),
 ]

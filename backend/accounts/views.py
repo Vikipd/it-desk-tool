@@ -1,9 +1,12 @@
+# Path: E:\it-admin-tool\backend\accounts\views.py
 # COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from rest_framework import generics, permissions, status, views, viewsets, filters
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.pagination import PageNumberPagination
+from rest_framework_simplejwt.tokens import RefreshToken
+from tickets.activity_logger import log_activity
 from .models import User, Contact
 from .serializers import (
     MyTokenObtainPairSerializer,
@@ -17,6 +20,21 @@ from .serializers import (
     ContactSerializer
 )
 from .permissions import IsAdminOrReadOnly, IsAdminRole
+
+class LogoutView(views.APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        log_activity(user=request.user, request=request, action='USER_LOGOUT', target=request.user.username, details="User logged out successfully.")
+        
+        try:
+            refresh_token = request.data["refresh_token"]
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(status=status.HTTP_205_RESET_CONTENT)
+        except Exception as e:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
@@ -55,8 +73,6 @@ class UserListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdminOrReadOnly]
     pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter]
-    # --- THIS IS THE FIX ---
-    # Added 'zone' to the list of fields that can be searched.
     search_fields = ['username', 'first_name', 'last_name', 'email', 'phone_number', 'role', 'zone']
 
     def get_serializer_class(self):
@@ -81,6 +97,7 @@ class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         if instance == self.request.user:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("You cannot deactivate your own account.")
+        log_activity(user=self.request.user, request=self.request, action='USER_DEACTIVATED', target=instance.username, details="User account was deactivated.")
         instance.is_active = False
         instance.save()
 
@@ -91,6 +108,7 @@ class RestoreUserView(views.APIView):
             user = User.objects.get(pk=pk)
             user.is_active = True
             user.save()
+            log_activity(user=request.user, request=request, action='USER_RESTORED', target=user.username, details="User account was restored.")
             return Response({"detail": "User restored successfully."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)

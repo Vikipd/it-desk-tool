@@ -23,11 +23,7 @@ const ContactsPage = () => {
     queryFn: () => api.get("/api/auth/contacts/"),
   });
 
-  // --- THIS IS THE FINAL, CORRECT FIX ---
-  // The API returns a simple array, not a paginated object.
-  // We must read the data directly.
   const contacts = contactsData?.data || [];
-  // --- END OF FIX ---
 
   const exportMutation = useMutation({
     mutationFn: () => api.get("/api/auth/contacts/export/"),
@@ -49,14 +45,16 @@ const ContactsPage = () => {
           `"${contact.email}"`,
         ].join(",")
       );
+
       const csvContent = [headers.join(","), ...rows].join("\n");
-      const blob = new Blob([csvContent], {
-        type: "text/csv;charset=utf-8;",
-      });
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `hfcl_spoc_contacts.csv`);
+      link.setAttribute(
+        "download",
+        `hfcl_spoc_contacts_${new Date().toISOString().split("T")[0]}.csv`
+      );
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -68,7 +66,7 @@ const ContactsPage = () => {
     <DashboardLayout
       pageTitle="HFCL Circle SPOC Contacts"
       username={username}
-      onExport={() => exportMutation.mutate()}
+      onExport={exportMutation.mutate}
       showExportButton={true}
     >
       <div className="overflow-x-auto bg-white rounded-lg shadow-md">
@@ -103,7 +101,6 @@ const ContactsPage = () => {
           </tbody>
         </table>
       </div>
-      {/* --- PAGINATION REMOVED AS IT IS NOT NEEDED --- */}
     </DashboardLayout>
   );
 };

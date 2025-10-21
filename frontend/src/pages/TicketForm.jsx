@@ -7,7 +7,7 @@ import api from "../api";
 import { toast } from "react-hot-toast";
 import Select from "react-select";
 import { ArrowLeft, UploadCloud } from "lucide-react";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth } from "../AuthContext"; // --- THIS IS THE FIX ---
 
 const formatOptions = (data) =>
   data ? data.map((item) => ({ value: item, label: item })) : [];
@@ -46,7 +46,7 @@ const ManualApiSelect = ({
 
 function TicketForm() {
   const navigate = useNavigate();
-  const { role } = useAuth();
+  const { userRole } = useAuth(); // Changed from role to userRole for consistency
   const [selectedZone, setSelectedZone] = useState(null);
   const [selectedState, setSelectedState] = useState(null);
   const [selectedNodeType, setSelectedNodeType] = useState(null);
@@ -238,11 +238,11 @@ function TicketForm() {
       await api.post("/api/tickets/", data);
       toast.success("Ticket created successfully!");
 
-      if (role === "CLIENT") {
+      if (userRole === "CLIENT") {
         navigate("/client-dashboard");
-      } else if (role === "TECHNICIAN") {
+      } else if (userRole === "TECHNICIAN") {
         navigate("/technician-dashboard");
-      } else if (role === "ADMIN") {
+      } else if (userRole === "ADMIN") {
         navigate("/admin-dashboard");
       } else {
         navigate(-1);
@@ -656,10 +656,10 @@ function TicketForm() {
             </fieldset>
             <button
               type="submit"
-              disabled={isSubmitting || isAutofilling || role === "OBSERVER"}
+              disabled={isSubmitting || isAutofilling || userRole === "OBSERVER"}
               className="w-full py-3 text-base font-semibold text-white bg-indigo-600 rounded-xl shadow-lg hover:bg-indigo-700 disabled:bg-indigo-400"
             >
-              {role === "OBSERVER"
+              {userRole === "OBSERVER"
                 ? "Viewing as Observer"
                 : isSubmitting
                 ? "Submitting..."

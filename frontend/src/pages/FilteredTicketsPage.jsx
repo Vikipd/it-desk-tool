@@ -11,7 +11,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import Select from "react-select";
-import { useAuth } from "../hooks/useAuth.js";
+import { useAuth } from "../AuthContext"; // --- THIS IS THE FIX ---
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "../layouts/DashboardLayout.jsx";
 
@@ -19,7 +19,6 @@ function useQueryParams() {
   return new URLSearchParams(useLocation().search);
 }
 
-// --- MODIFICATION: ADDED HELPER FUNCTION ---
 const formatOptions = (data) =>
   data ? data.map((item) => ({ value: item, label: item })) : [];
 
@@ -90,7 +89,7 @@ const priorityDropdownOptions = [
 const FilteredTicketsPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role } = useAuth();
+  const { userRole } = useAuth(); // Changed from role to userRole for consistency
   const urlQuery = useQueryParams();
 
   const [currentPage, setCurrentPage] = useState(
@@ -105,12 +104,10 @@ const FilteredTicketsPage = () => {
   const [searchFilter, setSearchFilter] = useState(
     urlQuery.get("search") || ""
   );
-  // --- MODIFICATION: ADDED STATE FOR STATE FILTER ---
   const [stateFilter, setStateFilter] = useState(urlQuery.get("state") || "");
   const [technicians, setTechnicians] = useState([]);
   const [username, setUsername] = useState("");
 
-  // --- MODIFICATION: ADDED QUERY TO FETCH STATES ---
   const { data: states, isLoading: isLoadingStates } = useQuery({
     queryKey: ["states"],
     queryFn: () => api.get("/api/tickets/states/").then((res) => res.data),
@@ -124,13 +121,11 @@ const FilteredTicketsPage = () => {
         status: statusFilter || undefined,
         priority: priorityFilter || undefined,
         search: searchFilter || undefined,
-        // --- MODIFICATION: ADDED STATE TO PARAMS ---
         state: stateFilter || undefined,
       };
       const res = await api.get("/api/tickets/", { params });
       return res.data;
     },
-    // --- MODIFICATION: ADDED STATEFILTER TO DEPENDENCY ARRAY ---
     [statusFilter, priorityFilter, searchFilter, stateFilter]
   );
 
@@ -140,7 +135,6 @@ const FilteredTicketsPage = () => {
     statusFilter,
     priorityFilter,
     searchFilter,
-    // --- MODIFICATION: ADDED STATEFILTER TO QUERY KEY ---
     stateFilter,
   ];
 
@@ -159,7 +153,6 @@ const FilteredTicketsPage = () => {
     setStatusFilter(params.get("status") || "");
     setPriorityFilter(params.get("priority") || "");
     setSearchFilter(params.get("search") || "");
-    // --- MODIFICATION: ADDED STATE TO URL SYNC ---
     setStateFilter(params.get("state") || "");
     setCurrentPage(parseInt(params.get("page")) || 1);
   }, [location.search]);
@@ -169,7 +162,7 @@ const FilteredTicketsPage = () => {
       try {
         const profileRes = await api.get("/api/auth/me/");
         setUsername(profileRes.data.username);
-        if (role === "ADMIN" || role === "OBSERVER") {
+        if (userRole === "ADMIN" || userRole === "OBSERVER") {
           const techResponse = await api.get("/api/auth/technicians/");
           setTechnicians(techResponse.data);
         }
@@ -178,7 +171,7 @@ const FilteredTicketsPage = () => {
       }
     };
     fetchRequiredData();
-  }, [role]);
+  }, [userRole]);
 
   const exportMutation = useMutation({
     mutationFn: () => {
@@ -186,7 +179,6 @@ const FilteredTicketsPage = () => {
         status: statusFilter || undefined,
         priority: priorityFilter || undefined,
         search: searchFilter || undefined,
-        // --- MODIFICATION: ADDED STATE TO EXPORT PARAMS ---
         state: stateFilter || undefined,
       };
       return api.get("/api/tickets/export-all/", { params });
@@ -222,7 +214,7 @@ const FilteredTicketsPage = () => {
         "Status",
         "Priority",
         "Zone",
-        "State", // <-- ADDED STATE TO CSV
+        "State",
         "Created By",
         "Assigned To",
         "Created At",
@@ -239,7 +231,7 @@ const FilteredTicketsPage = () => {
           `"${ticket.status}"`,
           `"${ticket.priority}"`,
           `"${ticket.card?.zone || ""}"`,
-          `"${ticket.card?.state || ""}"`, // <-- ADDED STATE TO CSV
+          `"${ticket.card?.state || ""}"`,
           `"${ticket.created_by?.username || ""}"`,
           `"${ticket.assigned_to?.username || "Unassigned"}"`,
           `"${new Date(ticket.created_at).toLocaleString()}"`,
@@ -285,7 +277,7 @@ const FilteredTicketsPage = () => {
 
   const headerActions = (
     <>
-      {(role === "ADMIN" || role === "OBSERVER") && (
+      {(userRole === "ADMIN" || userRole === "OBSERVER") && (
         <button
           onClick={() => navigate("/admin-dashboard")}
           className="flex items-center font-semibold bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 shadow-sm text-sm"
@@ -305,7 +297,6 @@ const FilteredTicketsPage = () => {
       headerActions={headerActions}
     >
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-        {/* --- MODIFICATION: UPDATED GRID FOR 4 ITEMS --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
           <div className="lg:col-span-1 relative">
             <input
@@ -346,7 +337,6 @@ const FilteredTicketsPage = () => {
             isClearable={true}
             placeholder="Select Priority"
           />
-          {/* --- MODIFICATION: ADDED STATE DROPDOWN --- */}
           <Select
             options={stateDropdownOptions}
             isLoading={isLoadingStates}
@@ -386,11 +376,10 @@ const FilteredTicketsPage = () => {
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Zone
               </th>
-              {/* --- MODIFICATION: ADDED STATE HEADER --- */}
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 State
               </th>
-              {(role === "ADMIN" || role === "OBSERVER") && (
+              {(userRole === "ADMIN" || userRole === "OBSERVER") && (
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Created By
                 </th>
@@ -447,11 +436,10 @@ const FilteredTicketsPage = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.card?.zone || "N/A"}
                   </td>
-                  {/* --- MODIFICATION: ADDED STATE DATA CELL --- */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.card?.state || "N/A"}
                   </td>
-                  {(role === "ADMIN" || role === "OBSERVER") && (
+                  {(userRole === "ADMIN" || userRole === "OBSERVER") && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                       {ticket.created_by?.username}
                     </td>
@@ -461,7 +449,7 @@ const FilteredTicketsPage = () => {
                       <span className="font-medium">
                         {ticket.assigned_to.username}
                       </span>
-                    ) : role === "ADMIN" || role === "OBSERVER" ? (
+                    ) : userRole === "ADMIN" || userRole === "OBSERVER" ? (
                       <AssigneeDropdown
                         ticket={ticket}
                         technicians={technicians}

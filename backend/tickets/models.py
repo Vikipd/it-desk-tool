@@ -1,3 +1,4 @@
+# Path: E:\it-admin-tool\backend\tickets\models.py
 # COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from django.db import models
@@ -87,26 +88,24 @@ class Comment(models.Model):
     class Meta:
         ordering = ['created_at']
 
-# --- THIS IS THE NEW MODEL ---
-# In the ActivityLog model, add the `indexes` Meta option.
-
 class ActivityLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='activities')
     action = models.CharField(max_length=50)
     timestamp = models.DateTimeField(default=timezone.now)
     target_object_id = models.CharField(max_length=100, null=True, blank=True)
     details = models.TextField()
+    
+    # --- FIX 1: Add user_role and ip_address fields ---
+    user_role = models.CharField(max_length=20, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.action} at {self.timestamp}"
 
     class Meta:
         ordering = ['-timestamp']
-        # --- THIS IS THE FIX ---
-        # Add indexes for faster filtering on these columns in the future.
         indexes = [
             models.Index(fields=['user']),
             models.Index(fields=['action']),
             models.Index(fields=['timestamp']),
         ]
-        

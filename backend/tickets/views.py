@@ -1,3 +1,4 @@
+# Path: E:\it-admin-tool\backend\tickets\views.py
 # COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from rest_framework import viewsets, permissions, filters, generics, status, views
@@ -39,17 +40,12 @@ class StateListView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get(self, request):
         zone = request.query_params.get('zone')
-        
-        # --- THIS IS THE FIX ---
-        # If a zone is provided, filter by it. Otherwise, get all states.
         if zone:
             queryset = Card.objects.filter(zone=zone)
         else:
             queryset = Card.objects.all()
-        
         states = queryset.values_list('state', flat=True).distinct().order_by('state')
         return Response(states)
-# --- END OF FIX ---
 
 class NodeTypeListView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -145,25 +141,24 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         ticket = serializer.save()
-        log_activity(self.request.user, 'TICKET_CREATED', target=ticket.ticket_id, details=f"Created new ticket with priority {ticket.priority}.")
+        log_activity(user=self.request.user, request=self.request, action='TICKET_CREATED', target=ticket.ticket_id, details=f"Created new ticket with priority {ticket.priority}.")
 
     def perform_update(self, serializer):
         original_ticket = self.get_object()
         original_status = original_ticket.status
         original_assignee = original_ticket.assigned_to
         
-        super().perform_update(serializer)
+        updated_ticket = serializer.save()
 
-        updated_ticket = serializer.instance
         new_status = updated_ticket.status
         new_assignee = updated_ticket.assigned_to
 
         if new_status != original_status:
-            log_activity(self.request.user, 'STATUS_CHANGED', target=updated_ticket.ticket_id, details=f"Changed status from {original_status} to {new_status}.")
+            log_activity(user=self.request.user, request=self.request, action='STATUS_CHANGED', target=updated_ticket.ticket_id, details=f"Changed status from {original_status} to {new_status}.")
         
         if new_assignee != original_assignee:
             assignee_name = new_assignee.username if new_assignee else "Unassigned"
-            log_activity(self.request.user, 'TICKET_ASSIGNED', target=updated_ticket.ticket_id, details=f"Assigned ticket to {assignee_name}.")
+            log_activity(user=self.request.user, request=self.request, action='TICKET_ASSIGNED', target=updated_ticket.ticket_id, details=f"Assigned ticket to {assignee_name}.")
     
     @action(detail=False, methods=['get'], url_path='dashboard-stats')
     def dashboard_stats(self, request):
@@ -248,22 +243,21 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket = self.get_object()
         serializer = self.get_serializer(ticket, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        for field, value in serializer.validated_data.items():
-            if field.endswith('_at'):
-                setattr(ticket, field, value)
-        ticket.save()
-        return Response(self.get_serializer(ticket).data)
+        log_activity(user=request.user, request=request, action='TIMESTAMPS_EDITED', target=ticket.ticket_id, details=f"Manually edited timestamps.")
+        serializer.save()
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='export-all')
     def export_all(self, request):
         queryset = self.filter_queryset(self.get_queryset())
+        log_activity(user=request.user, request=request, action='TICKET_EXPORT', details=f"Exported {queryset.count()} tickets.")
         serializer = TicketListSerializer(queryset, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'], url_path='update-status-with-comment', permission_classes=[IsTechnicianRole])
     def update_status_with_comment(self, request, pk=None):
         ticket = self.get_object()
-        serializer = StatusUpdateWithCommentSerializer(data=request.data, context={'ticket': ticket, 'user': request.user})
+        serializer = StatusUpdateWithCommentSerializer(data=request.data, context={'request': request, 'ticket': ticket})
         if serializer.is_valid():
             serializer.save()
             return Response(TicketDetailSerializer(ticket).data, status=status.HTTP_200_OK)
@@ -279,7 +273,8 @@ class CommentViewSet(viewsets.ModelViewSet):
         ticket_id = self.kwargs.get('ticket_pk')
         try:
             ticket = Ticket.objects.get(pk=ticket_id)
-            serializer.save(author=self.request.user, ticket=ticket)
+            comment = serializer.save(author=self.request.user, ticket=ticket)
+            log_activity(user=self.request.user, request=self.request, action='COMMENT_ADDED', target=ticket.ticket_id, details=f"Added comment: '{comment.text[:50]}...'")
         except Ticket.DoesNotExist:
             raise serializers.ValidationError("Ticket not found.")
 
@@ -294,5 +289,6 @@ class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'], url_path='export')
     def export(self, request):
         queryset = self.filter_queryset(self.get_queryset())
+        log_activity(user=request.user, request=request, action='ACTIVITY_LOG_EXPORT', details=f"Exported {queryset.count()} activity log entries.")
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)

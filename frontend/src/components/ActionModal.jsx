@@ -1,4 +1,5 @@
-// COPY AND PASTE THIS ENTIRE BLOCK INTO THE NEW FILE: frontend/src/components/ActionModal.jsx
+// Path: E:\it-admin-tool\frontend\src\components\ActionModal.jsx
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,8 +19,16 @@ const ActionModal = ({ ticketId, action, onClose, onUpdate }) => {
       onUpdate();
       onClose();
     },
+    // --- THIS IS THE FIX: More detailed error logging ---
     onError: (error) => {
-      toast.error(error.response?.data?.error || 'Failed to update ticket.');
+      const errorData = error.response?.data;
+      let errorMessage = 'Failed to update ticket.';
+      if (typeof errorData === 'object' && errorData !== null) {
+        // Try to find a specific message
+        errorMessage = errorData.detail || errorData.error || Object.values(errorData).flat().join(' ');
+      }
+      toast.error(errorMessage);
+      console.error("Detailed error response from ActionModal:", error.response);
     },
   });
 

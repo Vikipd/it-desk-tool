@@ -1,3 +1,4 @@
+# Path: E:\it-admin-tool\backend\accounts\serializers.py
 # COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from rest_framework import serializers
@@ -8,20 +9,18 @@ from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from tickets.activity_logger import log_activity 
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.request = self.context.get("request")
+
     @classmethod
     def get_token(cls, user):
-        # --- THIS IS THE FINAL, CORRECT FIX ---
-        # The 'user' object passed here is lazy. We must fetch the full object
-        # from the database to guarantee access to all custom fields like 'zone'.
         try:
             full_user = User.objects.get(id=user.id)
         except User.DoesNotExist:
-            # This should not happen in a normal login flow, but is safe to have.
             raise AuthenticationFailed("User not found during token generation.")
 
         token = super().get_token(full_user)
-        
-        # Now, populate the token using the complete user object.
         token['user_id'] = full_user.id
         token['role'] = full_user.role
         token['must_change_password'] = full_user.must_change_password
@@ -29,13 +28,12 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
-        # The parent's validate method correctly handles authentication
-        # and sets `self.user`.
         data = super().validate(attrs)
         
-        # The `self.user` object is available here for logging.
-        log_activity(self.user, 'USER_LOGIN', target=self.user.username, details="User logged in successfully.")
-        
+        # This is the final, correct place to log the login action.
+        if hasattr(self, 'user'):
+            log_activity(user=self.user, action='USER_LOGIN', request=self.request, target=self.user.username, details="User logged in successfully.")
+            
         return data
 
 class UserCreateSerializer(serializers.ModelSerializer):
@@ -50,14 +48,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"password": "Password fields didn't match."})
         if User.objects.filter(email__iexact=attrs['email']).exists():
             raise serializers.ValidationError({"email": "A user with that email already exists."})
-        first_name = attrs.get('first_name', '')
-        last_name = attrs.get('last_name', '')
-        if any(char.isdigit() for char in first_name):
-            raise serializers.ValidationError({"first_name": "First name cannot contain numbers."})
-        if last_name and any(char.isdigit() for char in last_name):
-            raise serializers.ValidationError({"last_name": "Last name cannot contain numbers."})
         return attrs
     def create(self, validated_data):
+        request = self.context.get("request")
         user = User.objects.create(
             username=validated_data['username'],
             email=validated_data['email'],
@@ -73,27 +66,27 @@ class UserCreateSerializer(serializers.ModelSerializer):
         else:
             user.must_change_password = True
         user.save()
+        
+        if request:
+             log_activity(user=request.user, request=request, action='USER_CREATED', target=user.username, details=f"New user created with role {user.role}.")
+        
         return user
-
-# ... (the rest of the file remains unchanged and is correct)
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
     class Meta:
         model = User
-        fields = ['username', 'email', 'first_name', 'last_name', 'phone_number', 'role']
+        fields = ['username', 'email', 'first_name', 'last_name', 'phone_number', 'role', 'zone']
     def validate_email(self, value):
         if User.objects.filter(email__iexact=value).exclude(pk=self.instance.pk).exists():
             raise serializers.ValidationError("A user with that email already exists.")
         return value
-    def validate(self, attrs):
-        first_name = attrs.get('first_name', self.instance.first_name)
-        last_name = attrs.get('last_name', self.instance.last_name)
-        if any(char.isdigit() for char in first_name):
-            raise serializers.ValidationError({"first_name": "First name cannot contain numbers."})
-        if last_name and any(char.isdigit() for char in last_name):
-            raise serializers.ValidationError({"last_name": "Last name cannot contain numbers."})
-        return attrs
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        updated_instance = super().update(instance, validated_data)
+        if request:
+            log_activity(user=request.user, request=request, action='USER_UPDATED', target=updated_instance.username, details="User details were updated.")
+        return updated_instance
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
@@ -106,12 +99,13 @@ class UserSerializer(serializers.ModelSerializer):
 class AdminPasswordResetSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     def update(self, instance, validated_data):
+        request = self.context.get("request")
         instance.set_password(validated_data['password'])
-        if instance.role == User.ADMIN:
-            instance.must_change_password = False
-        else:
+        if instance.role != User.ADMIN:
             instance.must_change_password = True
         instance.save()
+        if request:
+            log_activity(user=request.user, request=request, action='ADMIN_PASSWORD_RESET', target=instance.username, details="Password was reset by an admin.")
         return instance
 
 class ForcedChangePasswordSerializer(serializers.Serializer):

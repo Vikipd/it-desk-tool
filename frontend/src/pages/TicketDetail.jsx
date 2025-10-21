@@ -1,6 +1,6 @@
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../api.js";
@@ -16,7 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Select from "react-select";
-import { useAuth } from "../hooks/useAuth.js";
+import { useAuth } from "../AuthContext"; // --- THIS IS THE FIX ---
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import ActionModal from "../components/ActionModal.jsx";
@@ -160,8 +160,7 @@ const AdminPriority = ({ ticket, onPriorityChange }) => {
   );
 };
 
-const EngineerActions = ({ ticket, onUpdate }) => {
-  const { user } = useAuth();
+const EngineerActions = ({ ticket, onUpdate, currentUserId }) => {
   const [selectedAction, setSelectedAction] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -177,7 +176,7 @@ const EngineerActions = ({ ticket, onUpdate }) => {
       toast.error(error.response?.data?.error || "Failed to update status."),
   });
 
-  if (!user || ticket.assigned_to !== user.id) {
+  if (!currentUserId || ticket.assigned_to !== currentUserId) {
     return null;
   }
 
@@ -260,12 +259,17 @@ const EngineerActions = ({ ticket, onUpdate }) => {
 const TicketDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { role } = useAuth();
+  const { userRole } = useAuth(); // Changed from role to userRole for consistency
   const queryClient = useQueryClient();
   const [newComment, setNewComment] = useState("");
   const [isEditingTimestamps, setIsEditingTimestamps] = useState(false);
   const [editableTimestamps, setEditableTimestamps] = useState({});
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  useEffect(() => {
+    api.get('/api/auth/me/').then(res => setCurrentUserId(res.data.id)).catch(console.error);
+  }, []);
 
   const {
     data: ticket,
@@ -372,17 +376,14 @@ const TicketDetail = () => {
     timestampMutation.mutate(payload);
   };
 
-  // --- THIS IS THE FIX ---
   const handlePrint = () => {
     const originalTitle = document.title;
     document.title = `Ticket_${ticket?.ticket_id || "Details"}`;
     window.print();
-    // Use a timeout to ensure the title is restored after the print dialog closes
     setTimeout(() => {
       document.title = originalTitle;
     }, 500);
   };
-  // --- END OF FIX ---
 
   const handleDeleteConfirm = () => {
     deleteMutation.mutate();
@@ -439,7 +440,7 @@ const TicketDetail = () => {
               </h1>
             </div>
             <div className="flex items-center gap-4">
-              {role === "ADMIN" && (
+              {userRole === "ADMIN" && (
                 <button
                   onClick={() => setIsDeleteModalOpen(true)}
                   className="flex items-center text-sm font-semibold bg-red-100 text-red-700 px-3 py-2 rounded-lg hover:bg-red-600 hover:text-white"
@@ -540,12 +541,12 @@ const TicketDetail = () => {
             </div>
             <div className="lg:col-span-1 space-y-8 print:space-y-0">
               <div className="print:hidden">
-                {role === "TECHNICIAN" && (
-                  <EngineerActions ticket={ticket} onUpdate={refetch} />
+                {userRole === "TECHNICIAN" && (
+                  <EngineerActions ticket={ticket} onUpdate={refetch} currentUserId={currentUserId} />
                 )}
               </div>
               <div className="print:hidden">
-                {role === "ADMIN" && (
+                {userRole === "ADMIN" && (
                   <>
                     <AdminAssign ticket={ticket} onAssign={handleAssign} />
                     <AdminPriority
@@ -568,7 +569,7 @@ const TicketDetail = () => {
               </div>
               <Section title="Ticket History">
                 <div className="flex justify-end mb-2 print:hidden">
-                  {role === "ADMIN" && (
+                  {userRole === "ADMIN" && (
                     <>
                       {!isEditingTimestamps ? (
                         <button

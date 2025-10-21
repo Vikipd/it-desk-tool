@@ -1,8 +1,9 @@
+// Path: E:\it-admin-tool\frontend\src\App.js
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "./hooks/useAuth";
+import { useAuth } from "./AuthContext"; // FIX: Import from new location
 
 import Login from "./pages/Login";
 import ClientDashboard from "./pages/ClientDashboard";
@@ -18,16 +19,33 @@ import ContactsPage from "./pages/ContactsPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
 
 const ProtectedRoute = ({ allowedRoles, children }) => {
-  const { isAuthenticated, role } = useAuth();
+  const { isAuthenticated, userRole, isLoading } = useAuth(); // FIX: Use new name 'userRole' and add 'isLoading'
+
+  // If we are still checking for a token, don't render anything yet
+  if (isLoading) {
+    return null; // Or a loading spinner component
+  }
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  if (role === "ADMIN") {
+
+  // Admin role has access to everything
+  if (userRole === "ADMIN") {
     return children;
   }
-  if (allowedRoles && !allowedRoles.includes(role)) {
-    return <Navigate to="/login" replace />;
+
+  // Check if the user's role is in the list of allowed roles
+  if (allowedRoles && !allowedRoles.includes(userRole)) {
+    // Redirect to a default page based on their role if they try to access a forbidden page
+    const fallbackPath = {
+      OBSERVER: "/admin-dashboard",
+      CLIENT: "/client-dashboard",
+      TECHNICIAN: "/technician-dashboard",
+    }[userRole] || "/login";
+    return <Navigate to={fallbackPath} replace />;
   }
+
   return children;
 };
 

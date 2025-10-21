@@ -1,7 +1,9 @@
+// COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
+
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth } from "../AuthContext"; // --- THIS IS THE FIX ---
 import api from "../api";
 import {
   PieChart,
@@ -77,7 +79,6 @@ const DashboardCard = ({
   return cardContent;
 };
 
-// --- THIS IS THE FIX: The SLA Breached / SLA Met line has been removed ---
 const SlaPerformanceCard = ({
   priority,
   targetDays,
@@ -95,7 +96,6 @@ const SlaPerformanceCard = ({
     >
       <div>
         <h3 className="font-bold text-gray-800 text-lg">{priority} Priority</h3>
-        {/* The "SLA Breached" and "SLA Met" <p> block was here and has been removed. */}
       </div>
 
       {hasBreachedTickets && (
@@ -126,7 +126,6 @@ const SlaPerformanceCard = ({
     </div>
   );
 };
-// --- END OF FIX ---
 
 const COLORS = [
   "#0088FE",
@@ -171,7 +170,7 @@ const prepareChartData = (data, nameKey, valueKey) =>
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { role } = useAuth();
+  const { userRole } = useAuth(); // Changed from role to userRole for consistency
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { data, isLoading, error } = useQuery({
     queryKey: ["adminDashboardData"],
@@ -226,12 +225,12 @@ const AdminDashboard = () => {
     <>
       <button
         onClick={() => navigate("/ticket-form")}
-        disabled={role === "OBSERVER"}
+        disabled={userRole === "OBSERVER"}
         className="flex items-center font-semibold bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
       >
         <PlusCircle size={16} className="mr-2" /> Submit Ticket
       </button>
-      {role !== "OBSERVER" && (
+      {userRole !== "OBSERVER" && (
         <button
           onClick={() => setIsModalOpen(true)}
           className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm"

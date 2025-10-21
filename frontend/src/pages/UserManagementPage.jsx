@@ -1,3 +1,4 @@
+// Path: E:\it-admin-tool\frontend\src\pages\UserManagementPage.jsx
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useState, useEffect } from "react";
@@ -19,7 +20,7 @@ import api from "../api";
 import { toast } from "react-hot-toast";
 import UserModal from "../components/UserModal";
 import ActionMenu from "../components/ActionMenu";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth } from "../AuthContext";
 import DashboardLayout from "../layouts/DashboardLayout";
 
 const roleDisplayMap = {
@@ -30,7 +31,7 @@ const roleDisplayMap = {
 };
 
 const UserManagementPage = () => {
-  const { role } = useAuth();
+  const { userRole } = useAuth();
   const [activeTab, setActiveTab] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,6 +39,7 @@ const UserManagementPage = () => {
   const queryClient = useQueryClient();
   const [currentUser, setCurrentUser] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const usersPerPage = 10; // Define page size for S.No calculation
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -92,7 +94,7 @@ const UserManagementPage = () => {
   });
 
   const handleOpenEditModal = (user) => {
-    if (role === "OBSERVER") return;
+    if (userRole === "OBSERVER") return;
     setEditingUser(user);
     setIsModalOpen(true);
   };
@@ -112,12 +114,11 @@ const UserManagementPage = () => {
   };
 
   const handlePageChange = (newPage) => {
-    if (newPage > 0 && (!totalCount || newPage <= Math.ceil(totalCount / 10))) {
+    if (newPage > 0 && (!totalCount || newPage <= Math.ceil(totalCount / usersPerPage))) {
       setCurrentPage(newPage);
     }
   };
 
-  // --- THIS IS A FIX: ADDED ZONE TO CSV EXPORT ---
   const csvHeaders = [
     { label: "Username", key: "username" },
     { label: "Full Name", key: "full_name" },
@@ -175,7 +176,7 @@ const UserManagementPage = () => {
       >
         <ChevronLeft size={16} className="mr-2" /> Back to Dashboard
       </Link>
-      {role !== "OBSERVER" && (
+      {userRole !== "OBSERVER" && (
         <button
           onClick={handleOpenCreateModal}
           className="flex items-center font-semibold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm"
@@ -215,7 +216,6 @@ const UserManagementPage = () => {
           <div className="relative">
             <input
               type="text"
-              // --- THIS IS A FIX: UPDATED PLACEHOLDER ---
               placeholder="Search by name, username, email, role, phone, zone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -246,6 +246,10 @@ const UserManagementPage = () => {
           <table className="min-w-full bg-white">
             <thead className="bg-slate-50">
               <tr>
+                {/* --- FIX 1: Add S.No header --- */}
+                <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase w-16">
+                  S.No
+                </th>
                 <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                   Username
                 </th>
@@ -258,14 +262,13 @@ const UserManagementPage = () => {
                 <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                   Role
                 </th>
-                {/* --- THIS IS THE FIX: ADDED ZONE HEADER --- */}
                 <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                   Zone
                 </th>
                 <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                   Phone
                 </th>
-                {role !== "OBSERVER" && (
+                {userRole !== "OBSERVER" && (
                   <th className="py-3 px-6 text-center text-xs font-semibold text-gray-500 uppercase">
                     Actions
                   </th>
@@ -276,15 +279,19 @@ const UserManagementPage = () => {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={role !== "OBSERVER" ? 7 : 6}
+                    colSpan={userRole !== "OBSERVER" ? 8 : 7}
                     className="text-center py-10"
                   >
                     <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
                   </td>
                 </tr>
               ) : (
-                users.map((user) => (
+                users.map((user, index) => (
                   <tr key={user.id} className="hover:bg-gray-50">
+                    {/* --- FIX 2: Add S.No data cell --- */}
+                    <td className="py-4 px-6 text-gray-600">
+                      {(currentPage - 1) * usersPerPage + index + 1}
+                    </td>
                     <td className="py-4 px-6 font-medium text-gray-800">
                       {user.username}
                     </td>
@@ -297,14 +304,13 @@ const UserManagementPage = () => {
                     <td className="py-4 px-6 text-gray-600">
                       {roleDisplayMap[user.role] || user.role}
                     </td>
-                    {/* --- THIS IS THE FIX: ADDED ZONE DATA CELL --- */}
                     <td className="py-4 px-6 text-gray-600">
                       {user.zone || "--"}
                     </td>
                     <td className="py-4 px-6 text-gray-600">
                       {user.phone_number || "--"}
                     </td>
-                    {role !== "OBSERVER" && (
+                    {userRole !== "OBSERVER" && (
                       <td className="py-4 px-6 text-center">
                         {user.id !== currentUser?.id && (
                           <ActionMenu actions={getActionsForUser(user)} />
@@ -321,11 +327,11 @@ const UserManagementPage = () => {
           <div className="text-sm text-gray-700">
             Showing{" "}
             <span className="font-medium">
-              {Math.min((currentPage - 1) * 10 + 1, totalCount)}
+              {Math.min((currentPage - 1) * usersPerPage + 1, totalCount)}
             </span>{" "}
             to{" "}
             <span className="font-medium">
-              {Math.min(currentPage * 10, totalCount)}
+              {Math.min(currentPage * usersPerPage, totalCount)}
             </span>{" "}
             of <span className="font-medium">{totalCount}</span> results
           </div>

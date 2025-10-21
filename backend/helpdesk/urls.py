@@ -1,3 +1,4 @@
+# Path: E:\it-admin-tool\backend\helpdesk\urls.py
 # COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from django.contrib import admin

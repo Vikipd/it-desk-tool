@@ -18,7 +18,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import api from "../api.js";
-import { useAuth } from "../hooks/useAuth.js";
+import { useAuth } from "../AuthContext"; // --- THIS IS THE FIX ---
 import DashboardLayout from "../layouts/DashboardLayout";
 
 const SummaryCard = ({ title, value, icon, color, onClick }) => (
@@ -41,16 +41,16 @@ const SummaryCard = ({ title, value, icon, color, onClick }) => (
 const TechnicianDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { role } = useAuth();
+  const { userRole } = useAuth(); // Changed from role to userRole for consistency
   const [username, setUsername] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [activeStatusFilter, setActiveStatusFilter] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const isTechnicianViewForAdmin = role === "ADMIN" || role === "OBSERVER";
+  const isTechnicianViewForAdmin = userRole === "ADMIN" || userRole === "OBSERVER";
 
   const { data: statsData, isLoading: isStatsLoading } = useQuery({
-    queryKey: ["dashboardStats", "technicianView", role],
+    queryKey: ["dashboardStats", "technicianView", userRole],
     queryFn: async () => {
       const statsUrl = isTechnicianViewForAdmin
         ? "/api/tickets/dashboard-stats/?view_as=technician"
@@ -74,7 +74,7 @@ const TechnicianDashboard = () => {
     queryKey: [
       "tickets",
       "technicianView",
-      role,
+      userRole,
       activeStatusFilter,
       searchTerm,
       currentPage,
@@ -247,12 +247,12 @@ const TechnicianDashboard = () => {
     <>
       <button
         onClick={() => navigate("/ticket-form")}
-        disabled={role !== "TECHNICIAN"}
+        disabled={userRole !== "TECHNICIAN"}
         className="flex items-center font-semibold bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
       >
         <PlusCircle size={16} className="mr-2" /> Submit Ticket
       </button>
-      {(role === "ADMIN" || role === "OBSERVER") && (
+      {(userRole === "ADMIN" || userRole === "OBSERVER") && (
         <button
           onClick={() => navigate("/admin-dashboard")}
           className="flex items-center font-semibold bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 shadow-sm text-sm"
@@ -265,7 +265,7 @@ const TechnicianDashboard = () => {
 
   return (
     <DashboardLayout
-      pageTitle={role === "TECHNICIAN" ? "Engineer Dashboard" : "Engineer View"}
+      pageTitle={userRole === "TECHNICIAN" ? "Engineer Dashboard" : "Engineer View"}
       username={username}
       onExport={() => exportMutation.mutate()}
       showExportButton={true}
@@ -318,7 +318,7 @@ const TechnicianDashboard = () => {
       <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200/80">
         <div className="p-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-800 tracking-tight">
-            {role === "TECHNICIAN"
+            {userRole === "TECHNICIAN"
               ? "My Assigned Tickets"
               : "All Assigned Tickets"}
           </h2>
@@ -363,7 +363,6 @@ const TechnicianDashboard = () => {
                   <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                     Priority
                   </th>
-                  {/* --- THIS IS THE FIX: ADDED CREATED BY HEADER --- */}
                   <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                     Created By
                   </th>
@@ -412,7 +411,6 @@ const TechnicianDashboard = () => {
                     <td className="py-5 px-6 text-gray-600">
                       {ticket.priority}
                     </td>
-                    {/* --- THIS IS THE FIX: ADDED CREATED BY DATA CELL --- */}
                     <td className="py-5 px-6 text-gray-600 font-medium">
                       {ticket.created_by?.username || "N/A"}
                     </td>
@@ -440,12 +438,12 @@ const TechnicianDashboard = () => {
         ) : (
           <div className="text-center py-20 px-6">
             <h3 className="text-xl font-semibold text-gray-800">
-              {role === "TECHNICIAN"
+              {userRole === "TECHNICIAN"
                 ? "No tickets assigned to you"
                 : "No assigned tickets match the current filters."}
             </h3>
             <p className="text-gray-500 mt-2">
-              {role === "TECHNICIAN"
+              {userRole === "TECHNICIAN"
                 ? "Check back later for new assignments."
                 : "This view shows tickets actively assigned to engineers."}
             </p>

@@ -1,14 +1,12 @@
+# Path: E:\it-admin-tool\backend\tickets\serializers.py
 # COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from rest_framework import serializers
 from django.utils import timezone
 from .models import Ticket, Comment, Card, ActivityLog
 from accounts.models import User
-
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'first_name', 'last_name']
+from .activity_logger import log_activity
+from accounts.serializers import UserSerializer
 
 class CardSerializer(serializers.ModelSerializer):
     class Meta:
@@ -118,9 +116,18 @@ class StatusUpdateWithCommentSerializer(serializers.Serializer):
 
     def save(self):
         ticket = self.context['ticket']
-        user = self.context['user']
+        request = self.context['request']
+        user = request.user
         new_status = self.validated_data['status']
         comment_text = self.validated_data['comment']
+        
+        log_activity(
+            request=request,
+            action='STATUS_CHANGED',
+            target=ticket.ticket_id,
+            details=f"Status changed to {new_status} with comment: '{comment_text[:50]}...'"
+        )
+
         Comment.objects.create(ticket=ticket, author=user, text=comment_text)
         ticket.status = new_status
         timestamp_field_map = {
@@ -138,4 +145,4 @@ class ActivityLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ActivityLog
-        fields = ['id', 'user', 'action', 'timestamp', 'target_object_id', 'details']
+        fields = ['id', 'user', 'user_role', 'ip_address', 'action', 'timestamp', 'target_object_id', 'details']

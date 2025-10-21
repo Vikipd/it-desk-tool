@@ -1,7 +1,7 @@
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
-import { useAuth } from "../hooks/useAuth.js";
+import { useAuth } from "../AuthContext"; // --- THIS IS THE FIX ---
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
@@ -41,16 +41,16 @@ const SummaryCard = ({ title, value, icon, color, onClick }) => (
 const ClientDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { role } = useAuth();
+  const { userRole } = useAuth(); // Changed from role to userRole for consistency
   const [username, setUsername] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [activeStatusFilter, setActiveStatusFilter] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const isClientViewForAdmin = role === "ADMIN" || role === "OBSERVER";
+  const isClientViewForAdmin = userRole === "ADMIN" || userRole === "OBSERVER";
 
   const { data: statsData, isLoading: isStatsLoading } = useQuery({
-    queryKey: ["dashboardStats", "clientView", role],
+    queryKey: ["dashboardStats", "clientView", userRole],
     queryFn: async () => {
       const statsUrl = isClientViewForAdmin
         ? "/api/tickets/dashboard-stats/?view_as=client"
@@ -74,7 +74,7 @@ const ClientDashboard = () => {
     queryKey: [
       "tickets",
       "clientView",
-      role,
+      userRole,
       activeStatusFilter,
       searchTerm,
       currentPage,
@@ -250,12 +250,12 @@ const ClientDashboard = () => {
     <>
       <button
         onClick={() => navigate("/ticket-form")}
-        disabled={role !== "CLIENT"}
+        disabled={userRole !== "CLIENT"}
         className="flex items-center font-semibold bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 shadow-sm text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
       >
         <PlusCircle size={16} className="mr-2" /> Submit Ticket
       </button>
-      {(role === "ADMIN" || role === "OBSERVER") && (
+      {(userRole === "ADMIN" || userRole === "OBSERVER") && (
         <button
           onClick={() => navigate("/admin-dashboard")}
           className="flex items-center font-semibold bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 shadow-sm text-sm"
@@ -268,7 +268,7 @@ const ClientDashboard = () => {
 
   return (
     <DashboardLayout
-      pageTitle={role === "CLIENT" ? "Client Dashboard" : "Client View"}
+      pageTitle={userRole === "CLIENT" ? "Client Dashboard" : "Client View"}
       username={username}
       onExport={() => exportMutation.mutate()}
       showExportButton={true}
@@ -321,7 +321,9 @@ const ClientDashboard = () => {
       <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200/80">
         <div className="p-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-800 tracking-tight">
-            {role === "CLIENT" ? "My Tickets" : "All Client-Submitted Tickets"}
+            {userRole === "CLIENT"
+              ? "My Tickets"
+              : "All Client-Submitted Tickets"}
           </h2>
           <div className="relative">
             <input
@@ -364,7 +366,6 @@ const ClientDashboard = () => {
                   <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                     Priority
                   </th>
-                  {/* --- THIS IS THE FIX: Conditionally render the 'Created By' column for admins --- */}
                   {isClientViewForAdmin && (
                     <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                       Created By
@@ -410,7 +411,6 @@ const ClientDashboard = () => {
                     <td className="py-5 px-6 text-gray-600">
                       {ticket.priority}
                     </td>
-                    {/* --- THIS IS THE FIX: Conditionally render the cell with the creator's username --- */}
                     {isClientViewForAdmin && (
                       <td className="py-5 px-6 text-gray-600 font-medium">
                         {ticket.created_by?.username || "N/A"}
@@ -438,11 +438,11 @@ const ClientDashboard = () => {
               No tickets found
             </h3>
             <p className="text-gray-500 mt-2">
-              {role === "CLIENT"
+              {userRole === "CLIENT"
                 ? "You haven't submitted any support tickets yet."
                 : "No client tickets match the current filters."}
             </p>
-            {role === "CLIENT" && (
+            {userRole === "CLIENT" && (
               <button
                 onClick={() => navigate("/ticket-form")}
                 className="mt-6 font-semibold bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition"

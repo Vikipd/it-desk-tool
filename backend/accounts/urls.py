@@ -1,21 +1,34 @@
+# Path: E:\it-admin-tool\backend\accounts\urls.py
 # COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
-    MyTokenObtainPairView, UserDetailView, UserListCreateView, TechnicianListView,
-    UserRetrieveUpdateDestroyView, AdminPasswordResetView, RestoreUserView,
-    ChangePasswordView, UserDetailsValidationView, ContactListView, ContactExportView
+    MyTokenObtainPairView, 
+    LogoutView, # --- FIX 1: Import the new LogoutView ---
+    UserDetailView, 
+    UserListCreateView, 
+    TechnicianListView,
+    UserRetrieveUpdateDestroyView, 
+    AdminPasswordResetView, 
+    RestoreUserView,
+    ChangePasswordView, 
+    UserDetailsValidationView, 
+    ContactListView, 
+    ContactExportView
 )
 
 urlpatterns = [
     path('token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    
+    # --- FIX 2: Add the URL pattern for the logout view ---
+    path('logout/', LogoutView.as_view(), name='auth_logout'),
+    
     path('me/', UserDetailView.as_view(), name='user-detail'),
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('validate-user-details/', UserDetailsValidationView.as_view(), name='validate-user-details'),
     path('users/', UserListCreateView.as_view(), name='user-list-create'),
-    # This URL pattern now works correctly with the corrected view.
     path('users/<int:pk>/', UserRetrieveUpdateDestroyView.as_view(), name='user-retrieve-update-destroy'),
     path('users/<int:pk>/restore/', RestoreUserView.as_view(), name='user-restore'),
     path('users/<int:pk>/reset-password/', AdminPasswordResetView.as_view(), name='admin-password-reset'),

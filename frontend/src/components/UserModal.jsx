@@ -1,3 +1,4 @@
+// Path: E:\it-admin-tool\frontend\src\components\UserModal.jsx
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useState, useEffect } from "react";
@@ -7,8 +8,8 @@ import { X, Eye, EyeOff, KeyRound } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../api";
 
-const formatOptions = (data) =>
-  data ? data.map((item) => ({ value: item, label: item })) : [];
+const formatZoneOptions = (data) =>
+  data ? data.map((zone) => ({ value: zone, label: zone })) : [];
 
 const UserModal = ({ user, onClose, onSave }) => {
   const isEditMode = Boolean(user);
@@ -38,6 +39,13 @@ const UserModal = ({ user, onClose, onSave }) => {
     queryKey: ["zones"],
     queryFn: () => api.get("/api/tickets/zones/").then((res) => res.data),
   });
+
+  // --- THIS IS THE DEBUGGING STEP ---
+  // This will show us in the browser console if the zones are being fetched correctly.
+  useEffect(() => {
+    console.log("Fetched zones from API:", zones);
+  }, [zones]);
+  // --- END OF DEBUGGING STEP ---
 
   useEffect(() => {
     if (isEditMode && user) {
@@ -74,10 +82,8 @@ const UserModal = ({ user, onClose, onSave }) => {
       if (isEditMode) {
         delete payload.password;
         delete payload.password2;
-        // --- THIS IS THE FIX for EDIT ---
         return api.put(`/api/auth/users/${user.id}/`, payload);
       } else {
-        // --- THIS IS THE FIX for CREATE ---
         return api.post("/api/auth/users/", payload);
       }
     },
@@ -223,7 +229,7 @@ const UserModal = ({ user, onClose, onSave }) => {
               <Select
                 value={selectedZone}
                 onChange={setSelectedZone}
-                options={formatOptions(zones)}
+                options={formatZoneOptions(zones)}
                 isLoading={isLoadingZones}
                 placeholder="Select Zone..."
                 className="mt-1"

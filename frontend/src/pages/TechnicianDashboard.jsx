@@ -363,7 +363,10 @@ const TechnicianDashboard = () => {
                   <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                     Priority
                   </th>
-                  {/* --- THIS IS THE FIX: Conditionally render the 'Assigned To' column for admins --- */}
+                  {/* --- THIS IS THE FIX: ADDED CREATED BY HEADER --- */}
+                  <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
+                    Created By
+                  </th>
                   {isTechnicianViewForAdmin && (
                     <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase">
                       Assigned To
@@ -409,7 +412,10 @@ const TechnicianDashboard = () => {
                     <td className="py-5 px-6 text-gray-600">
                       {ticket.priority}
                     </td>
-                    {/* --- THIS IS THE FIX: Conditionally render the cell with the assignee's username --- */}
+                    {/* --- THIS IS THE FIX: ADDED CREATED BY DATA CELL --- */}
+                    <td className="py-5 px-6 text-gray-600 font-medium">
+                      {ticket.created_by?.username || "N/A"}
+                    </td>
                     {isTechnicianViewForAdmin && (
                       <td className="py-5 px-6 text-gray-600 font-medium">
                         {ticket.assigned_to?.username || "N/A"}

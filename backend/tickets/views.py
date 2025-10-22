@@ -148,10 +148,22 @@ class TicketViewSet(viewsets.ModelViewSet):
         original_status = original_ticket.status
         original_assignee = original_ticket.assigned_to
         
+        # --- THIS IS THE FIX ---
+        # We manually check if the assignee has changed and set the timestamp.
+        # This is safer than doing it in the serializer.
+        new_assignee = serializer.validated_data.get('assigned_to', original_assignee)
+        if new_assignee != original_assignee:
+            if new_assignee is not None:
+                # Set the timestamp if a new user is assigned
+                serializer.instance.assigned_at = timezone.now()
+            else:
+                # Clear the timestamp if the ticket is unassigned
+                serializer.instance.assigned_at = None
+        
         updated_ticket = serializer.save()
 
+        # Activity Logging Logic
         new_status = updated_ticket.status
-        new_assignee = updated_ticket.assigned_to
 
         if new_status != original_status:
             log_activity(user=self.request.user, request=self.request, action='STATUS_CHANGED', target=updated_ticket.ticket_id, details=f"Changed status from {original_status} to {new_status}.")

@@ -109,18 +109,6 @@ class TicketDetailSerializer(serializers.ModelSerializer):
             'under_repair_at', 'on_hold_at', 'resolved_at', 'closed_at', 'sla_days'
         ]
         read_only_fields = ['id', 'ticket_id', 'created_by', 'assigned_to_details', 'card', 'comments', 'created_at', 'updated_at']
-        
-    def update(self, instance, validated_data):
-        if 'assigned_to' in validated_data:
-            new_assignee = validated_data.get('assigned_to')
-            
-            if instance.assigned_to != new_assignee:
-                if new_assignee is not None:
-                    instance.assigned_at = timezone.now()
-                else:
-                    instance.assigned_at = None
-        
-        return super().update(instance, validated_data)
 
 class StatusUpdateWithCommentSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Ticket.STATUS_CHOICES)
@@ -133,10 +121,10 @@ class StatusUpdateWithCommentSerializer(serializers.Serializer):
         new_status = self.validated_data['status']
         comment_text = self.validated_data['comment']
         
-        # --- THIS IS THE FIX ---
-        # The 'user' argument was missing from this function call. We have added it back.
+        # --- THIS IS THE FIX for the Engineer Actions bug ---
+        # The 'user' argument was missing and has been added.
         log_activity(
-            user=user, # This was the missing piece.
+            user=user, 
             request=request,
             action='STATUS_CHANGED',
             target=ticket.ticket_id,

@@ -21,7 +21,9 @@ from .serializers import (
 )
 from .filters import TicketFilter, ActivityLogFilter
 from accounts.models import User
-from accounts.permissions import IsTechnicianRole
+# --- THIS IS THE FIX for the ticket deletion ---
+# We import the application's specific IsAdminRole permission class.
+from accounts.permissions import IsTechnicianRole, IsAdminRole
 from .permissions import IsAdminOrObserver
 from .activity_logger import log_activity
 
@@ -135,8 +137,10 @@ class TicketViewSet(viewsets.ModelViewSet):
         return TicketDetailSerializer
 
     def get_permissions(self):
+        # --- THIS IS THE FIX for the ticket deletion ---
+        # We use the app's IsAdminRole class to ensure only true admins can delete.
         if self.action == 'destroy':
-            self.permission_classes = [permissions.IsAdminUser]
+            self.permission_classes = [IsAdminRole]
         return super().get_permissions()
 
     def perform_create(self, serializer):
@@ -148,7 +152,6 @@ class TicketViewSet(viewsets.ModelViewSet):
         original_status = original_ticket.status
         original_assignee = original_ticket.assigned_to
         
-        # Handle `assigned_at` timestamp
         new_assignee = serializer.validated_data.get('assigned_to', original_assignee)
         if new_assignee != original_assignee:
             if new_assignee is not None:
@@ -156,15 +159,12 @@ class TicketViewSet(viewsets.ModelViewSet):
             else:
                 serializer.instance.assigned_at = None
 
-        # --- THIS IS THE FINAL FIX ---
-        # Handle `closed_at` timestamp
         new_status = serializer.validated_data.get('status', original_status)
         if new_status == 'CLOSED' and original_status != 'CLOSED':
             serializer.instance.closed_at = timezone.now()
         
         updated_ticket = serializer.save()
 
-        # Activity Logging Logic
         if new_status != original_status:
             log_activity(user=self.request.user, request=self.request, action='STATUS_CHANGED', target=updated_ticket.ticket_id, details=f"Changed status from {original_status} to {new_status}.")
         

@@ -40,13 +40,6 @@ const UserModal = ({ user, onClose, onSave }) => {
     queryFn: () => api.get("/api/tickets/zones/").then((res) => res.data),
   });
 
-  // --- THIS IS THE DEBUGGING STEP ---
-  // This will show us in the browser console if the zones are being fetched correctly.
-  useEffect(() => {
-    console.log("Fetched zones from API:", zones);
-  }, [zones]);
-  // --- END OF DEBUGGING STEP ---
-
   useEffect(() => {
     if (isEditMode && user) {
       setFormData({
@@ -110,8 +103,10 @@ const UserModal = ({ user, onClose, onSave }) => {
   });
 
   const { mutate: resetPassword, isPending: isResetting } = useMutation({
+    // --- THIS IS THE FIX for the password reset ---
+    // The backend view expects a PATCH request, not a POST request.
     mutationFn: (passwordData) =>
-      api.post(`/api/auth/users/${user.id}/reset-password/`, passwordData),
+      api.patch(`/api/auth/users/${user.id}/reset-password/`, passwordData),
     onSuccess: () => {
       toast.success("Password reset successfully!");
       setShowPasswordReset(false);

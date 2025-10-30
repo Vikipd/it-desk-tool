@@ -1,7 +1,7 @@
 // Path: E:\it-admin-tool\frontend\src\pages\UserManagementPage.jsx
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -39,7 +39,13 @@ const UserManagementPage = () => {
   const queryClient = useQueryClient();
   const [currentUser, setCurrentUser] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const usersPerPage = 10; // Define page size for S.No calculation
+  const usersPerPage = 10;
+
+  const [csvData, setCsvData] = useState([]);
+  const [isExporting, setIsExporting] = useState(false);
+  // --- FIX 1: Add state to hold the dynamic filename ---
+  const [csvFilename, setCsvFilename] = useState("");
+  const csvLinkRef = useRef(null);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -74,6 +80,14 @@ const UserManagementPage = () => {
   const totalCount = data?.count || 0;
   const hasNextPage = data?.next !== null;
   const hasPreviousPage = data?.previous !== null;
+
+  useEffect(() => {
+    if (csvData.length > 0 && csvLinkRef.current) {
+      csvLinkRef.current.link.click();
+      setCsvData([]); 
+      setCsvFilename(""); // Reset filename
+    }
+  }, [csvData]);
 
   const deactivateUserMutation = useMutation({
     mutationFn: (userId) => api.delete(`/api/auth/users/${userId}/`),
@@ -119,26 +133,62 @@ const UserManagementPage = () => {
     }
   };
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const isActive = activeTab === "active";
+      const params = {
+        is_active: isActive,
+        search: searchTerm || undefined,
+        export: 'true',
+      };
+      const response = await api.get("/api/auth/users/", { params });
+      
+      const exportedUserCount = response.data.length;
+      const dataToExport = response.data.map((user, index) => ({
+        "S.No": index + 1,
+        Username: user.username,
+        "Full Name": user.full_name || `${user.first_name} ${user.last_name}`.trim(),
+        Email: user.email || "--",
+        Role: roleDisplayMap[user.role] || user.role,
+        Zone: user.zone || "--",
+        "Phone Number": user.phone_number || "--",
+      }));
+
+      // --- FIX 2: Set the dynamic filename with the count ---
+      const date = new Date().toISOString().split("T")[0];
+      const filename = `users-${activeTab}-${exportedUserCount}-records-${date}.csv`;
+      setCsvFilename(filename);
+      setCsvData(dataToExport);
+
+    } catch (error) {
+      toast.error("Failed to export data.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const csvHeaders = [
-    { label: "Username", key: "username" },
-    { label: "Full Name", key: "full_name" },
-    { label: "Email", key: "email" },
-    { label: "Role", key: "role" },
-    { label: "Zone", key: "zone" },
-    { label: "Phone Number", key: "phone_number" },
+    { label: "S.No", key: "S.No" },
+    { label: "Username", key: "Username" },
+    { label: "Full Name", key: "Full Name" },
+    { label: "Email", key: "Email" },
+    { label: "Role", key: "Role" },
+    { label: "Zone", key: "Zone" },
+    { label: "Phone Number", key: "Phone Number" },
   ];
-  const csvData = users.map((user) => ({
-    ...user,
-    full_name: user.full_name || `${user.first_name} ${user.last_name}`.trim(),
-    email: user.email || "--",
-    role: roleDisplayMap[user.role] || user.role,
-    zone: user.zone || "--",
-    phone_number: user.phone_number || "--",
-  }));
 
   const getActionsForUser = (user) => {
-    if (user.id === currentUser?.id) return [];
-
+    if (user.id === currentUser?.id) {
+      return [
+        {
+          label: "Edit My Details",
+          icon: <Edit size={16} className="mr-3" />,
+          onClick: () => handleOpenEditModal(user),
+        },
+      ];
+    }
+    
     if (activeTab === "active") {
       return [
         {
@@ -151,13 +201,14 @@ const UserManagementPage = () => {
           icon: <Trash2 size={16} className="mr-3" />,
           className: "text-red-600",
           onClick: () => {
-            if (window.confirm("Are you sure?")) {
+            if (window.confirm("Are you sure you want to deactivate this user?")) {
               deactivateUserMutation.mutate(user.id);
             }
           },
         },
       ];
     }
+
     return [
       {
         label: "Restore User",
@@ -202,6 +253,7 @@ const UserManagementPage = () => {
               setActiveTab("active");
               setCurrentPage(1);
             }}
+            count={activeTab === 'active' ? totalCount : undefined}
           />
           <TabButton
             title="Inactive Members"
@@ -210,6 +262,7 @@ const UserManagementPage = () => {
               setActiveTab("inactive");
               setCurrentPage(1);
             }}
+            count={activeTab === 'inactive' ? totalCount : undefined}
           />
         </div>
         <div className="flex items-center justify-between mb-4">
@@ -227,26 +280,35 @@ const UserManagementPage = () => {
             />
           </div>
           <button
-            disabled={csvData.length === 0}
+            onClick={handleExport}
+            disabled={isExporting || totalCount === 0}
             className="flex items-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm disabled:bg-gray-400"
           >
-            <FileDown size={16} className="mr-2" />
-            <CSVLink
-              data={csvData}
-              headers={csvHeaders}
-              filename={`users-${activeTab}-${
-                new Date().toISOString().split("T")[0]
-              }.csv`}
-            >
-              Download CSV
-            </CSVLink>
+            {isExporting ? (
+              <>
+                <Loader2 size={16} className="mr-2 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <FileDown size={16} className="mr-2" />
+                Download CSV
+              </>
+            )}
           </button>
+          {/* --- FIX 3: Use the dynamic filename state here --- */}
+          <CSVLink
+            data={csvData}
+            headers={csvHeaders}
+            filename={csvFilename}
+            ref={csvLinkRef}
+            className="hidden"
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white">
             <thead className="bg-slate-50">
               <tr>
-                {/* --- FIX 1: Add S.No header --- */}
                 <th className="py-3 px-6 text-left text-xs font-semibold text-gray-500 uppercase w-16">
                   S.No
                 </th>
@@ -288,7 +350,6 @@ const UserManagementPage = () => {
               ) : (
                 users.map((user, index) => (
                   <tr key={user.id} className="hover:bg-gray-50">
-                    {/* --- FIX 2: Add S.No data cell --- */}
                     <td className="py-4 px-6 text-gray-600">
                       {(currentPage - 1) * usersPerPage + index + 1}
                     </td>
@@ -312,9 +373,7 @@ const UserManagementPage = () => {
                     </td>
                     {userRole !== "OBSERVER" && (
                       <td className="py-4 px-6 text-center">
-                        {user.id !== currentUser?.id && (
-                          <ActionMenu actions={getActionsForUser(user)} />
-                        )}
+                        <ActionMenu actions={getActionsForUser(user)} />
                       </td>
                     )}
                   </tr>
@@ -366,16 +425,21 @@ const UserManagementPage = () => {
   );
 };
 
-const TabButton = ({ title, isActive, onClick }) => (
+const TabButton = ({ title, isActive, onClick, count }) => (
   <button
     onClick={onClick}
-    className={`py-2 px-4 text-sm font-semibold ${
+    className={`py-2 px-4 text-sm font-semibold flex items-center gap-2 ${
       isActive
         ? "border-b-2 border-blue-600 text-blue-600"
         : "text-gray-500 hover:text-gray-700"
     }`}
   >
     {title}
+    {count !== undefined && (
+      <span className={`px-2 py-0.5 rounded-full text-xs ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+        {count}
+      </span>
+    )}
   </button>
 );
 

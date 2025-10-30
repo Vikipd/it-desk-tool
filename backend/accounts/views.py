@@ -94,8 +94,6 @@ class UserListCreateView(generics.ListCreateAPIView):
         
         return super().list(request, *args, **kwargs)
 
-# --- THIS IS THE FIX ---
-# Corrected the class name from RetrieveUpdateDestroyView to RetrieveUpdateDestroyAPIView
 class UserRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     permission_classes = [IsAdminOrReadOnly]

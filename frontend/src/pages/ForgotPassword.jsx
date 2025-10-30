@@ -1,11 +1,11 @@
+// Path: E:\it-admin-tool\frontend\src\pages\ForgotPassword.jsx
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-hot-toast";
-import { ArrowLeft, Mail, User, Phone, CheckCircle, Info } from "lucide-react";
+import { ArrowLeft, Mail, User, Phone, CheckCircle, Info, AlertTriangle } from "lucide-react";
 import api from "../api";
-// import Footer from '../components/Footer';
 
 const ForgotPassword = () => {
   const [formData, setFormData] = useState({
@@ -16,13 +16,16 @@ const ForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState("");
+  const [genericError, setGenericError] = useState(""); // State for the generic error message
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    // Clear errors when the user starts typing
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
+    if (genericError) setGenericError("");
     if (success) setSuccess("");
   };
 
@@ -38,6 +41,7 @@ const ForgotPassword = () => {
     setIsLoading(true);
     setErrors({});
     setSuccess("");
+    setGenericError(""); // Reset generic error on new submission
 
     try {
       await api.post("/api/auth/validate-user-details/", formData);
@@ -45,14 +49,19 @@ const ForgotPassword = () => {
       setSuccess("Validation successful. Please see below for the next step.");
       toast.success("Details validated successfully!");
     } catch (err) {
+      // --- THIS IS THE FIX ---
+      // This logic correctly separates specific validation errors from other unexpected errors.
       const serverErrors = err.response?.data;
-      if (serverErrors && typeof serverErrors === "object") {
+      
+      // Check if the server sent back specific validation errors (like wrong email, etc.)
+      if (err.response?.status === 400 && serverErrors && typeof serverErrors === "object") {
         setErrors(serverErrors);
-        toast.error("Please correct the errors shown on the form.");
+        toast.error("Please correct the errors shown below.");
       } else {
-        const genericError = "An unexpected error occurred. Please try again.";
-        setErrors({ form: genericError });
-        toast.error(genericError);
+        // If it's any other type of error (like 500 server error), show a generic message.
+        const errorMsg = "An unexpected error occurred. Please try again later.";
+        setGenericError(errorMsg);
+        toast.error(errorMsg);
       }
     } finally {
       setIsLoading(false);
@@ -67,7 +76,7 @@ const ForgotPassword = () => {
             <div className="text-center mb-8">
               <img
                 src="/assets/images/favicon.png"
-                alt="HFCL Logo"
+                alt="Logo"
                 className="w-auto h-12 mx-auto mb-4"
               />
               <h1 className="text-3xl font-bold text-slate-800">
@@ -79,6 +88,14 @@ const ForgotPassword = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* --- FIX: Display the generic error message at the top of the form --- */}
+              {genericError && (
+                <div className="flex items-center space-x-2 text-red-700 text-sm p-3 bg-red-50 rounded-lg border border-red-200">
+                  <AlertTriangle size={20} className="flex-shrink-0" />
+                  <span>{genericError}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Username
@@ -165,17 +182,14 @@ const ForgotPassword = () => {
                   <span>{success}</span>
                 </div>
               )}
-
-              {/* --- THIS IS THE FIX: This block now appears on SUCCESS OR on ERROR --- */}
-              {(success || Object.keys(errors).length > 0) && (
-                <div className="flex items-start space-x-2 text-slate-600 text-sm p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <Info size={20} className="flex-shrink-0 mt-0.5" />
-                  <span>
-                    For assistance, please contact the administrator at{" "}
-                    <strong>admin@example.com</strong>.
-                  </span>
-                </div>
-              )}
+              
+              <div className="flex items-start space-x-2 text-slate-600 text-sm p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <Info size={20} className="flex-shrink-0 mt-0.5" />
+                <span>
+                  For assistance, please contact the administrator at{" "}
+                  <strong>admin@example.com</strong>.
+                </span>
+              </div>
 
               <div className="pt-2">
                 <button
@@ -200,7 +214,6 @@ const ForgotPassword = () => {
           </div>
         </div>
       </div>
-      {/* <Footer /> */}
     </div>
   );
 };

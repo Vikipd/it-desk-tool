@@ -16,21 +16,23 @@ const ForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState("");
-  const [genericError, setGenericError] = useState(""); // State for the generic error message
+  const [genericError, setGenericError] = useState("");
+  const [hasAttempted, setHasAttempted] = useState(false); // --- THIS IS THE FIX: New state to track if user has submitted ---
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear errors when the user starts typing
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
     if (genericError) setGenericError("");
     if (success) setSuccess("");
+    if (hasAttempted) setHasAttempted(false); // Reset on new input
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setHasAttempted(true); // --- THIS IS THE FIX: Mark that a submission attempt was made ---
     const { username, email, phone_number } = formData;
 
     if (!username || !email || !phone_number) {
@@ -41,24 +43,18 @@ const ForgotPassword = () => {
     setIsLoading(true);
     setErrors({});
     setSuccess("");
-    setGenericError(""); // Reset generic error on new submission
+    setGenericError("");
 
     try {
       await api.post("/api/auth/validate-user-details/", formData);
-
-      setSuccess("Validation successful. Please see below for the next step.");
+      setSuccess("Validation successful. An administrator will contact you shortly with password reset instructions.");
       toast.success("Details validated successfully!");
     } catch (err) {
-      // --- THIS IS THE FIX ---
-      // This logic correctly separates specific validation errors from other unexpected errors.
       const serverErrors = err.response?.data;
-      
-      // Check if the server sent back specific validation errors (like wrong email, etc.)
       if (err.response?.status === 400 && serverErrors && typeof serverErrors === "object") {
         setErrors(serverErrors);
         toast.error("Please correct the errors shown below.");
       } else {
-        // If it's any other type of error (like 500 server error), show a generic message.
         const errorMsg = "An unexpected error occurred. Please try again later.";
         setGenericError(errorMsg);
         toast.error(errorMsg);
@@ -88,7 +84,6 @@ const ForgotPassword = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* --- FIX: Display the generic error message at the top of the form --- */}
               {genericError && (
                 <div className="flex items-center space-x-2 text-red-700 text-sm p-3 bg-red-50 rounded-lg border border-red-200">
                   <AlertTriangle size={20} className="flex-shrink-0" />
@@ -183,13 +178,16 @@ const ForgotPassword = () => {
                 </div>
               )}
               
-              <div className="flex items-start space-x-2 text-slate-600 text-sm p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <Info size={20} className="flex-shrink-0 mt-0.5" />
-                <span>
-                  For assistance, please contact the administrator at{" "}
-                  <strong>admin@example.com</strong>.
-                </span>
-              </div>
+              {/* --- THIS IS THE FIX: This info box now only appears AFTER the user clicks the button --- */}
+              {hasAttempted && (
+                <div className="flex items-start space-x-2 text-slate-600 text-sm p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <Info size={20} className="flex-shrink-0 mt-0.5" />
+                  <span>
+                    For assistance, please contact the administrator at{" "}
+                    <strong>admin@example.com</strong>.
+                  </span>
+                </div>
+              )}
 
               <div className="pt-2">
                 <button

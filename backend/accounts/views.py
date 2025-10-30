@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework_simplejwt.tokens import RefreshToken
+from django_filters.rest_framework import DjangoFilterBackend
 from tickets.activity_logger import log_activity
 from .models import User, Contact
 from .serializers import (
@@ -72,8 +73,9 @@ class MyTokenObtainPairView(TokenObtainPairView):
 class UserListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdminOrReadOnly]
     pagination_class = StandardResultsSetPagination
-    filter_backends = [filters.SearchFilter]
-    search_fields = ['username', 'first_name', 'last_name', 'email', 'phone_number', 'role', 'zone']
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['role']
+    search_fields = ['username', 'first_name', 'last_name', 'email', 'phone_number', 'zone']
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -84,20 +86,17 @@ class UserListCreateView(generics.ListCreateAPIView):
         is_active = is_active_param.lower() == 'true'
         return User.objects.filter(is_active=is_active).order_by('username')
 
-    # --- THIS IS THE FIX for CSV EXPORT ---
-    # This overrides the default list behavior to handle the 'export' query parameter.
     def list(self, request, *args, **kwargs):
-        # Check if the 'export' parameter is in the request
         if request.query_params.get('export') == 'true':
             queryset = self.filter_queryset(self.get_queryset())
             serializer = self.get_serializer(queryset, many=True)
-            # Return all data without pagination
             return Response(serializer.data)
         
-        # If not exporting, proceed with the default paginated list behavior
         return super().list(request, *args, **kwargs)
 
-class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+# --- THIS IS THE FIX ---
+# Corrected the class name from RetrieveUpdateDestroyView to RetrieveUpdateDestroyAPIView
+class UserRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     permission_classes = [IsAdminOrReadOnly]
     
@@ -130,14 +129,12 @@ class AdminPasswordResetView(generics.UpdateAPIView):
     queryset = User.objects.all()
     permission_classes = [IsAdminRole]
     serializer_class = AdminPasswordResetSerializer
-    # --- THIS IS A FIX ---
-    # The URL expects a POST, but UpdateAPIView uses PUT/PATCH. Overriding post() is cleaner.
     def post(self, request, *args, **kwargs):
         return self.partial_update(request, *args, **kwargs)
         
     def update(self, request, *args, **kwargs):
         user = self.get_object()
-        serializer = self.get_serializer(user, data=request.data, partial=True) # Use partial=True
+        serializer = self.get_serializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         log_activity(user=request.user, request=self.request, action='ADMIN_PASSWORD_RESET', target=user.username, details="Password was reset by an admin.")

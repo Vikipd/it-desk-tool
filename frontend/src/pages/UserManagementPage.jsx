@@ -1,4 +1,4 @@
-// Path: E:\it-admin-tool\frontend\src\pages\UserManagementPage.jsx
+// Path: E:\it-admin-tool\frontend\src/pages/UserManagementPage.jsx
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useState, useEffect, useRef } from "react";
@@ -15,6 +15,7 @@ import {
   PlusCircle,
   Loader2,
 } from "lucide-react";
+import Select from "react-select";
 import { CSVLink } from "react-csv";
 import api from "../api";
 import { toast } from "react-hot-toast";
@@ -30,6 +31,14 @@ const roleDisplayMap = {
   OBSERVER: "Project Manager",
 };
 
+// --- FIX 1: Options for the new Role Filter dropdown ---
+const roleFilterOptions = [
+  { value: "ADMIN", label: "Admin" },
+  { value: "TECHNICIAN", label: "Engineer" },
+  { value: "CLIENT", label: "Client" },
+  { value: "OBSERVER", label: "Project Manager" },
+];
+
 const UserManagementPage = () => {
   const { userRole } = useAuth();
   const [activeTab, setActiveTab] = useState("active");
@@ -39,11 +48,11 @@ const UserManagementPage = () => {
   const queryClient = useQueryClient();
   const [currentUser, setCurrentUser] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [roleFilter, setRoleFilter] = useState(null); // State for the new filter
   const usersPerPage = 10;
 
   const [csvData, setCsvData] = useState([]);
   const [isExporting, setIsExporting] = useState(false);
-  // --- FIX 1: Add state to hold the dynamic filename ---
   const [csvFilename, setCsvFilename] = useState("");
   const csvLinkRef = useRef(null);
 
@@ -58,16 +67,24 @@ const UserManagementPage = () => {
     };
     fetchCurrentUser();
   }, []);
+  
+  // This effect resets the page to 1 when search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roleFilter]); // --- FIX 2: Also reset page when roleFilter changes ---
 
-  const queryKey = ["users", activeTab, searchTerm, currentPage];
+  // --- FIX 3: Add roleFilter to the queryKey ---
+  const queryKey = ["users", activeTab, searchTerm, roleFilter, currentPage];
 
   const { data, isLoading } = useQuery({
     queryKey: queryKey,
     queryFn: async () => {
       const isActive = activeTab === "active";
+      // --- FIX 4: Add roleFilter to the API request parameters ---
       const params = {
         is_active: isActive,
         search: searchTerm || undefined,
+        role: roleFilter ? roleFilter.value : undefined,
         page: currentPage,
       };
       const response = await api.get(`/api/auth/users/`, { params });
@@ -85,7 +102,7 @@ const UserManagementPage = () => {
     if (csvData.length > 0 && csvLinkRef.current) {
       csvLinkRef.current.link.click();
       setCsvData([]); 
-      setCsvFilename(""); // Reset filename
+      setCsvFilename("");
     }
   }, [csvData]);
 
@@ -137,9 +154,11 @@ const UserManagementPage = () => {
     setIsExporting(true);
     try {
       const isActive = activeTab === "active";
+      // --- FIX 5: Add roleFilter to the export API call ---
       const params = {
         is_active: isActive,
         search: searchTerm || undefined,
+        role: roleFilter ? roleFilter.value : undefined,
         export: 'true',
       };
       const response = await api.get("/api/auth/users/", { params });
@@ -155,7 +174,6 @@ const UserManagementPage = () => {
         "Phone Number": user.phone_number || "--",
       }));
 
-      // --- FIX 2: Set the dynamic filename with the count ---
       const date = new Date().toISOString().split("T")[0];
       const filename = `users-${activeTab}-${exportedUserCount}-records-${date}.csv`;
       setCsvFilename(filename);
@@ -266,18 +284,30 @@ const UserManagementPage = () => {
           />
         </div>
         <div className="flex items-center justify-between mb-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search by name, username, email, role, phone, zone..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border rounded-lg w-96 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <Search
-              size={20}
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-            />
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search by name, username, email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 border rounded-lg w-80 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <Search
+                size={20}
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              />
+            </div>
+            {/* --- FIX 6: Add the new Role Filter Select component --- */}
+            <div className="w-48">
+              <Select
+                options={roleFilterOptions}
+                value={roleFilter}
+                onChange={setRoleFilter}
+                isClearable={true}
+                placeholder="Filter by Role..."
+              />
+            </div>
           </div>
           <button
             onClick={handleExport}
@@ -296,7 +326,6 @@ const UserManagementPage = () => {
               </>
             )}
           </button>
-          {/* --- FIX 3: Use the dynamic filename state here --- */}
           <CSVLink
             data={csvData}
             headers={csvHeaders}

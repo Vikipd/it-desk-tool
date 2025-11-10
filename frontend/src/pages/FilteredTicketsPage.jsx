@@ -1,3 +1,4 @@
+// Path: E:\it-admin-tool\frontend\src\pages\FilteredTicketsPage.jsx
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -11,7 +12,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import Select from "react-select";
-import { useAuth } from "../AuthContext"; // --- THIS IS THE FIX ---
+import { useAuth } from "../AuthContext";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "../layouts/DashboardLayout.jsx";
 
@@ -22,11 +23,14 @@ function useQueryParams() {
 const formatOptions = (data) =>
   data ? data.map((item) => ({ value: item, label: item })) : [];
 
+// --- THIS IS THE FIX for the Dropdown Menu ---
 const AssigneeDropdown = ({ ticket, technicians, queryKey }) => {
   const queryClient = useQueryClient();
+  
+  // FIX 1: Display full name and username for clarity
   const technicianOptions = technicians.map((tech) => ({
     value: tech.id,
-    label: tech.username,
+    label: `${tech.first_name} ${tech.last_name} (${tech.username})`,
   }));
 
   const assignMutation = useMutation({
@@ -53,7 +57,7 @@ const AssigneeDropdown = ({ ticket, technicians, queryKey }) => {
   );
 
   return (
-    <div onClick={(e) => e.stopPropagation()}>
+    <div onClick={(e) => e.stopPropagation()} className="w-48">
       <Select
         options={technicianOptions}
         value={currentValue}
@@ -63,8 +67,10 @@ const AssigneeDropdown = ({ ticket, technicians, queryKey }) => {
           assignMutation.variables?.ticketId === ticket.id
         }
         placeholder="Assign..."
-        className="min-w-[150px] text-sm"
         isClearable={false}
+        // FIX 2: Render the dropdown menu in the body, not the table cell
+        menuPortalTarget={document.body}
+        styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
       />
     </div>
   );
@@ -89,7 +95,7 @@ const priorityDropdownOptions = [
 const FilteredTicketsPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { userRole } = useAuth(); // Changed from role to userRole for consistency
+  const { userRole } = useAuth();
   const urlQuery = useQueryParams();
 
   const [currentPage, setCurrentPage] = useState(
@@ -297,8 +303,9 @@ const FilteredTicketsPage = () => {
       headerActions={headerActions}
     >
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
-          <div className="lg:col-span-1 relative">
+        {/* --- THIS IS THE FIX for the Filter Layout --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-center">
+          <div className="lg:col-span-2 relative">
             <input
               type="text"
               placeholder="Search by Ticket ID, Node, Status, Priority..."
@@ -352,45 +359,45 @@ const FilteredTicketsPage = () => {
         </div>
       </div>
       <div className="overflow-x-auto bg-white rounded-lg shadow-md">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-slate-100">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-12">
                 S.No
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-40">
                 Ticket ID
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
                 Node Name
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-28">
                 Card Type
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-32">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-28">
                 Priority
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-24">
                 Zone
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-24">
                 State
               </th>
               {(userRole === "ADMIN" || userRole === "OBSERVER") && (
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-36">
                   Created By
                 </th>
               )}
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-52">
                 Assigned To
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-48">
                 Created At
               </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-48">
                 Closed At
               </th>
             </tr>
@@ -415,36 +422,36 @@ const FilteredTicketsPage = () => {
                   className="hover:bg-slate-50 cursor-pointer"
                   onClick={() => navigate(`/tickets/${ticket.id}`)}
                 >
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                     {(currentPage - 1) * 10 + index + 1}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 hover:underline">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 hover:underline">
                     {ticket.ticket_id}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800 truncate">
                     {ticket.card?.node_name || "N/A"}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.card?.card_type || "N/A"}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.status}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.priority}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.card?.zone || "N/A"}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.card?.state || "N/A"}
                   </td>
                   {(userRole === "ADMIN" || userRole === "OBSERVER") && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800">
                       {ticket.created_by?.username}
                     </td>
                   )}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.assigned_to?.username ? (
                       <span className="font-medium">
                         {ticket.assigned_to.username}
@@ -459,10 +466,10 @@ const FilteredTicketsPage = () => {
                       "Unassigned"
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800">
                     {new Date(ticket.created_at).toLocaleString()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800">
                     {ticket.closed_at
                       ? new Date(ticket.closed_at).toLocaleString()
                       : "---"}

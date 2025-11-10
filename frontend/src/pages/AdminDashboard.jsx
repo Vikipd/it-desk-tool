@@ -1,9 +1,10 @@
+// Path: E:\it-admin-tool\frontend\src\pages\AdminDashboard.jsx
 // COPY AND PASTE THIS ENTIRE, FINAL, PERFECT BLOCK.
 
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "../AuthContext"; // --- THIS IS THE FIX ---
+import { useAuth } from "../AuthContext";
 import api from "../api";
 import {
   PieChart,
@@ -25,6 +26,7 @@ import {
 import UserModal from "../components/UserModal";
 import DashboardLayout from "../layouts/DashboardLayout";
 
+// --- THIS IS THE FINAL, CORRECTED, AND PROFESSIONAL CARD DESIGN ---
 const DashboardCard = ({
   title,
   value,
@@ -34,50 +36,50 @@ const DashboardCard = ({
   isUserCard = false,
 }) => {
   const cardClasses = isUserCard
-    ? "bg-indigo-100 border-2 border-indigo-400"
+    ? "bg-indigo-50 border-indigo-200"
     : isActionCard
-    ? "bg-orange-100 border-2 border-orange-400"
-    : "bg-white";
+    ? "bg-orange-50 border-orange-200"
+    : "bg-white border-gray-200";
   const textClasses = isUserCard
     ? "text-indigo-600"
     : isActionCard
     ? "text-orange-600"
     : "text-gray-800";
   const iconBgClasses = isUserCard
-    ? "bg-indigo-200"
+    ? "bg-indigo-100"
     : isActionCard
-    ? "bg-orange-200"
+    ? "bg-orange-100"
     : "bg-slate-100";
   const iconTextClasses = isUserCard
-    ? "text-indigo-600"
+    ? "text-indigo-500"
     : isActionCard
-    ? "text-orange-600"
-    : "text-slate-600";
+    ? "text-orange-500"
+    : "text-slate-500";
+
   const cardContent = (
     <div
-      className={`${cardClasses} p-6 rounded-xl shadow-lg flex items-center w-full h-full hover:shadow-xl hover:-translate-y-1 transition-all duration-300`}
+      className={`${cardClasses} p-3 rounded-xl shadow-lg flex flex-col items-center justify-center text-center w-full h-full border hover:shadow-xl hover:-translate-y-1 transition-all duration-300`}
     >
-      <div
-        className={`mr-5 p-3 rounded-full ${iconBgClasses} ${iconTextClasses}`}
-      >
+      <div className={`p-2.5 rounded-full ${iconBgClasses} ${iconTextClasses}`}>
         {icon}
       </div>
-      <div>
-        <p className="text-sm font-medium text-gray-500">{title}</p>
-        <p className={`text-3xl font-bold ${textClasses} tracking-tight`}>
-          {value}
-        </p>
-      </div>
+      <p className={`mt-2 text-2xl font-bold ${textClasses} tracking-tight`}>
+        {value}
+      </p>
+      <p className="mt-1 text-xs font-medium text-gray-500">{title}</p>
     </div>
   );
-  if (to)
+
+  if (to) {
     return (
-      <Link to={to} className="block">
+      <Link to={to} className="block h-full">
         {cardContent}
       </Link>
     );
+  }
   return cardContent;
 };
+
 
 const SlaPerformanceCard = ({
   priority,
@@ -170,7 +172,7 @@ const prepareChartData = (data, nameKey, valueKey) =>
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { userRole } = useAuth(); // Changed from role to userRole for consistency
+  const { userRole } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { data, isLoading, error } = useQuery({
     queryKey: ["adminDashboardData"],
@@ -253,7 +255,7 @@ const AdminDashboard = () => {
       username={username}
       headerActions={headerActions}
     >
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6 mb-10">
         <DashboardCard
           title="Total Tickets"
           value={summary.total_tickets || 0}
